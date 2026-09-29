@@ -34,7 +34,15 @@ def main() -> None:
 
     engine = ReplayDetectionEngine()
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind((args.host, args.port))
+    try:
+        sock.bind((args.host, args.port))
+    except OSError as exc:
+        sock.close()
+        raise SystemExit(
+            f"Cannot listen on udp://{args.host}:{args.port}: {exc.strerror}.\n"
+            "Another receiver is probably still running. Stop it with Ctrl+C, "
+            "or use a different port with --port (and pass the same --port to the sender)."
+        )
     print(f"Replay gate listening on udp://{args.host}:{args.port}  (Ctrl+C to stop)\n")
     print(f"{'device':<10} {'seq':>7}  {'verdict':<15} {'rule':<24} {'latency':>9}  detail")
 
