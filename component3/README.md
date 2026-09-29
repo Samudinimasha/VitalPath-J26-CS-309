@@ -1,4 +1,4 @@
-# Component 3 — Lightweight Telemetry Anomaly and Replay Detection Engine
+# Component 3 - Lightweight Telemetry Anomaly and Replay Detection Engine
 
 Part of **VitalPath: A 5G Security Middleware for Connected Ambulance Telemetry** (J26-CS-309).
 Owner: B.S.N. Fernando (IT23382244).
