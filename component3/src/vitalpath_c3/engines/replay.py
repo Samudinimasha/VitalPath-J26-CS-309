@@ -84,70 +84,105 @@ class ReplayDetectionEngine:
         self._mask = (1 << self.config.window_size) - 1
         self._windows: Dict[str, _DeviceWindow] = {}
 
-    def check(self, header: PacketHeader) -> ReplayVerdict:
-        """Validate a packet header and update the device's window if accepted.
+    def check(self, header: PacketHeader, commit: bool = True) -> ReplayVerdict:
+        """Validate a packet header against the device's window.
 
-        Rejected packets leave the window unchanged.
+        With ``commit=True`` an accepted packet is recorded at once. The
+        pipeline passes ``commit=False`` and calls :meth:`commit` only after
+        the payload has decrypted and authenticated, so a forged packet can
+        never use up a sequence number and get the genuine packet rejected
+        later (the same rule as RFC 4303 s3.4.3). Rejected packets never
+        change the window.
         """
+        verdict = self._evaluate(header)
+        if commit and verdict.passed:
+            self._record(header)
+        return verdict
+
+    def commit(self, header: PacketHeader) -> bool:
+        """Record a packet that passed :meth:`check` and has been authenticated.
+
+        The header is re-checked first, so if an identical packet was committed
+        in between, this one is not recorded twice. Returns True if recorded.
+        """
+        if not self._evaluate(header, log=False).passed:
+            return False
+        self._record(header)
+        return True
+
+    def _evaluate(self, header: PacketHeader, log: bool = True) -> ReplayVerdict:
+        discard = self._discard if log else _discard_quietly
         problem = _malformed_reason(header)
         if problem:
-            return self._discard(header, Rule.MALFORMED_HEADER, problem)
+            return discard(header, Rule.MALFORMED_HEADER, problem)
 
-        device_id: str = header.device_id
         seq: int = header.seq
         ts = float(header.timestamp)
-        window = self._windows.get(device_id)
+        window = self._windows.get(header.device_id)
 
         if window is not None:
             offset = window.highest_seq - seq
             if offset >= self.config.window_size:
-                return self._discard(
+                return discard(
                     header,
                     Rule.REPLAY_OUTSIDE_WINDOW,
                     f"seq {seq} is {offset} behind highest {window.highest_seq}",
                 )
             if (offset >= 0 and window.bitmap >> offset & 1) or seq == window.pending_jump_seq:
-                return self._discard(header, Rule.REPLAY_DUPLICATE, f"seq {seq} already seen")
+                return discard(header, Rule.REPLAY_DUPLICATE, f"seq {seq} already seen")
 
-        freshness = self._check_freshness(header, ts)
-        if freshness is not None:
-            return freshness
+        now = self._clock()
+        if now - ts > self.config.max_age_s:
+            return discard(header, Rule.TS_STALE, f"packet is {now - ts:.3f}s old")
+        if ts - now > self.config.future_skew_s:
+            return discard(header, Rule.TS_FUTURE, f"packet is {ts - now:.3f}s in the future")
 
         if window is None:
-            self._windows[device_id] = _DeviceWindow(highest_seq=seq, bitmap=1, highest_ts=ts)
             return _accept(header, Rule.REPLAY_ACCEPT, "first packet for device")
 
         if ts < window.highest_ts - self.config.backward_tolerance_s:
-            return self._discard(
+            return discard(
                 header,
                 Rule.TS_REGRESSION,
                 f"timestamp {window.highest_ts - ts:.3f}s behind newest accepted",
             )
 
         if seq < window.highest_seq:
-            # Late but unseen packet inside the window (out-of-order delivery).
-            window.bitmap |= 1 << (window.highest_seq - seq)
             return _accept(header, Rule.REPLAY_ACCEPT, "out-of-order within window")
 
         jump = seq - window.highest_seq
         if jump > self.config.max_seq_jump:
+            if log:
+                logger.warning("Sequence jump: device=%s seq=%s jump=%d", header.device_id, seq, jump)
+            return ReplayVerdict(
+                ReplayOutcome.ACCEPT_FLAGGED,
+                Rule.SEQ_JUMP,
+                header.device_id,
+                seq,
+                f"jump of {jump} exceeds {self.config.max_seq_jump}; window not advanced",
+            )
+
+        return _accept(header, Rule.REPLAY_ACCEPT, "in sequence")
+
+    def _record(self, header: PacketHeader) -> None:
+        """Apply an accepted packet to the window. Assumes _evaluate passed."""
+        seq: int = header.seq
+        ts = float(header.timestamp)
+        window = self._windows.get(header.device_id)
+        if window is None:
+            self._windows[header.device_id] = _DeviceWindow(highest_seq=seq, bitmap=1, highest_ts=ts)
+        elif seq < window.highest_seq:
+            # Late but unseen packet inside the window (out-of-order delivery).
+            window.bitmap |= 1 << (window.highest_seq - seq)
+        elif seq - window.highest_seq > self.config.max_seq_jump:
             # An unauthenticated header alone never moves the window: two forged
             # far-ahead packets must not be able to lock the real device out.
             # The window only moves via confirm_jump(), once decryption has
             # proven the packet authentic.
             window.pending_jump_seq = seq
             window.pending_jump_ts = ts
-            logger.warning("Sequence jump: device=%s seq=%s jump=%d", device_id, seq, jump)
-            return ReplayVerdict(
-                ReplayOutcome.ACCEPT_FLAGGED,
-                Rule.SEQ_JUMP,
-                device_id,
-                seq,
-                f"jump of {jump} exceeds {self.config.max_seq_jump}; window not advanced",
-            )
-
-        self._advance(window, seq, ts)
-        return _accept(header, Rule.REPLAY_ACCEPT, "in sequence")
+        else:
+            self._advance(window, seq, ts)
 
     def confirm_jump(self, device_id: str, seq: int) -> bool:
         """Advance the window to a flagged jump once it is proven authentic.
@@ -167,14 +202,6 @@ class ReplayDetectionEngine:
             seq,
         )
         return True
-
-    def _check_freshness(self, header: PacketHeader, ts: float) -> Optional[ReplayVerdict]:
-        now = self._clock()
-        if now - ts > self.config.max_age_s:
-            return self._discard(header, Rule.TS_STALE, f"packet is {now - ts:.3f}s old")
-        if ts - now > self.config.future_skew_s:
-            return self._discard(header, Rule.TS_FUTURE, f"packet is {ts - now:.3f}s in the future")
-        return None
 
     def _advance(self, window: _DeviceWindow, seq: int, ts: float) -> None:
         """Slide the window forward so that ``seq`` becomes the highest accepted."""
@@ -207,6 +234,12 @@ class ReplayDetectionEngine:
             detail,
         )
         return verdict
+
+
+def _discard_quietly(header: PacketHeader, rule: Rule, detail: str) -> ReplayVerdict:
+    return ReplayVerdict(
+        ReplayOutcome.DISCARD, rule, getattr(header, "device_id", None), getattr(header, "seq", None), detail
+    )
 
 
 def _accept(header: PacketHeader, rule: Rule, detail: str) -> ReplayVerdict:

@@ -281,6 +281,46 @@ def test_flagged_packet_recorded_when_stream_catches_up(clock):
     assert engine.check(hdr(20, clock.now)).rule is Rule.REPLAY_DUPLICATE
 
 
+# --- Check before decryption, commit after (pipeline use) --------------------
+
+
+def test_check_without_commit_leaves_window_unchanged(engine, clock):
+    feed(engine, clock, [1])
+    assert engine.check(hdr(2, clock.now), commit=False).passed
+    # Not recorded, so the same packet is still acceptable.
+    assert engine.check(hdr(2, clock.now), commit=False).passed
+
+
+def test_forged_packet_cannot_burn_a_sequence_number(engine, clock):
+    """A packet that fails decryption is never committed, so the genuine
+    packet with the same sequence number is still accepted afterwards."""
+    feed(engine, clock, [1])
+    forged = hdr(2, clock.now)
+    assert engine.check(forged, commit=False).passed  # decryption then fails
+    assert engine.check(hdr(2, clock.now)).rule is Rule.REPLAY_ACCEPT
+
+
+def test_commit_records_packet(engine, clock):
+    feed(engine, clock, [1])
+    h = hdr(2, clock.now)
+    assert engine.check(h, commit=False).passed
+    assert engine.commit(h)
+    assert engine.check(h).rule is Rule.REPLAY_DUPLICATE
+
+
+def test_commit_refuses_packet_already_recorded(engine, clock):
+    feed(engine, clock, [1])
+    h = hdr(2, clock.now)
+    assert engine.check(h, commit=False).passed
+    assert engine.check(h, commit=False).passed  # identical copy in flight
+    assert engine.commit(h)
+    assert not engine.commit(h)
+
+
+def test_commit_of_malformed_header_is_refused(engine):
+    assert not engine.commit(None)
+
+
 # --- 5G handover / reconnection (S3, S4, FR2) --------------------------------
 
 
