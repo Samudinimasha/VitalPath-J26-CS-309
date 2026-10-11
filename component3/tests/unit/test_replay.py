@@ -234,17 +234,42 @@ def test_replay_of_flagged_jump_packet_rejected(engine, clock):
     assert engine.check(hdr(5000, clock.now)).rule is Rule.REPLAY_DUPLICATE
 
 
-def test_jump_confirmed_by_next_packet_resynchronises(engine, clock):
+def test_two_forged_jumps_cannot_lock_out_real_device(engine, clock):
+    """Regression: found in the live simulator run. Two injected far-ahead
+    packets used to resynchronise the window and discard all real traffic."""
+    feed(engine, clock, range(1, 11))
+    assert engine.check(hdr(50_010, clock.now)).rule is Rule.SEQ_JUMP
+    assert engine.check(hdr(50_082, clock.now)).rule is Rule.SEQ_JUMP
+    assert engine.check(hdr(50_083, clock.now)).rule is Rule.SEQ_JUMP
+    feed(engine, clock, range(11, 21), start_ts=clock.now)
+
+
+def test_legitimate_large_gap_is_flagged_not_discarded(engine, clock):
+    """Without confirmation, a real device that skips far ahead is still
+    delivered (flagged) and never discarded."""
     feed(engine, clock, [1])
-    assert engine.check(hdr(5000, clock.now)).rule is Rule.SEQ_JUMP
-    v = engine.check(hdr(5001, clock.now))
-    assert v.outcome is ReplayOutcome.ACCEPT
-    assert v.rule is Rule.SEQ_RESYNC
-    # Both packets are now inside the window and cannot be replayed.
+    for seq in (5000, 5001, 5002):
+        v = engine.check(hdr(seq, clock.now))
+        assert v.outcome is ReplayOutcome.ACCEPT_FLAGGED
+        assert v.passed
+
+
+def test_confirm_jump_advances_window(engine, clock):
+    feed(engine, clock, [1])
+    engine.check(hdr(5000, clock.now))
+    assert engine.confirm_jump(DEVICE, 5000)
     assert engine.check(hdr(5000, clock.now)).rule is Rule.REPLAY_DUPLICATE
-    assert engine.check(hdr(5001, clock.now)).rule is Rule.REPLAY_DUPLICATE
-    # The pre-jump position is now far outside the window.
+    assert engine.check(hdr(5001, clock.now)).rule is Rule.REPLAY_ACCEPT
     assert engine.check(hdr(2, clock.now)).rule is Rule.REPLAY_OUTSIDE_WINDOW
+
+
+def test_confirm_jump_ignores_unknown_packets(engine, clock):
+    feed(engine, clock, [1])
+    assert not engine.confirm_jump(DEVICE, 5000)
+    assert not engine.confirm_jump("unknown-device", 5000)
+    engine.check(hdr(5000, clock.now))
+    assert not engine.confirm_jump(DEVICE, 4999)
+    assert engine.check(hdr(2, clock.now)).rule is Rule.REPLAY_ACCEPT
 
 
 def test_flagged_packet_recorded_when_stream_catches_up(clock):

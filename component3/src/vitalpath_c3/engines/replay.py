@@ -20,6 +20,8 @@ Checks, in order, each tied to a named rule:
 6. Timestamp not behind newest by > tolerance  -> R-TS-REGRESSION
 7. Forward jump no larger than ``max_seq_jump`` -> R-SEQ-JUMP (flag)   (S10)
 
+A flagged jump never moves the window by itself; see ``confirm_jump``.
+
 Replay checks (2, 3) run before timestamp checks so that a resent packet is
 reported as a replay even when its timestamp has also gone stale.
 """
@@ -66,8 +68,9 @@ class _DeviceWindow:
     bitmap: int
     highest_ts: float
     # Sequence number of the most recent packet flagged for an excessive jump.
-    # It is not merged into the window unless the next packet confirms it.
+    # It is merged into the window only through confirm_jump().
     pending_jump_seq: Optional[int] = None
+    pending_jump_ts: float = 0.0
 
 
 class ReplayDetectionEngine:
@@ -128,16 +131,12 @@ class ReplayDetectionEngine:
 
         jump = seq - window.highest_seq
         if jump > self.config.max_seq_jump:
-            pending = window.pending_jump_seq
-            if pending is not None and 0 < seq - pending <= self.config.max_seq_jump:
-                # Two consecutive packets agree on the new position: treat the
-                # earlier flagged packet as confirmed and resynchronise.
-                self._advance(window, pending, window.highest_ts)
-                self._advance(window, seq, ts)
-                return _accept(
-                    header, Rule.SEQ_RESYNC, f"resynchronised after jump to {pending}"
-                )
+            # An unauthenticated header alone never moves the window: two forged
+            # far-ahead packets must not be able to lock the real device out.
+            # The window only moves via confirm_jump(), once decryption has
+            # proven the packet authentic.
             window.pending_jump_seq = seq
+            window.pending_jump_ts = ts
             logger.warning("Sequence jump: device=%s seq=%s jump=%d", device_id, seq, jump)
             return ReplayVerdict(
                 ReplayOutcome.ACCEPT_FLAGGED,
@@ -149,6 +148,25 @@ class ReplayDetectionEngine:
 
         self._advance(window, seq, ts)
         return _accept(header, Rule.REPLAY_ACCEPT, "in sequence")
+
+    def confirm_jump(self, device_id: str, seq: int) -> bool:
+        """Advance the window to a flagged jump once it is proven authentic.
+
+        Called by the pipeline after the packet's payload has decrypted and
+        authenticated successfully with Component 2's key material. Returns
+        True if the window was moved.
+        """
+        window = self._windows.get(device_id)
+        if window is None or window.pending_jump_seq != seq:
+            return False
+        self._advance(window, seq, window.pending_jump_ts)
+        logger.info(
+            "Sequence jump confirmed: rule=%s device=%s seq=%s",
+            Rule.SEQ_JUMP_CONFIRMED.value,
+            device_id,
+            seq,
+        )
+        return True
 
     def _check_freshness(self, header: PacketHeader, ts: float) -> Optional[ReplayVerdict]:
         now = self._clock()

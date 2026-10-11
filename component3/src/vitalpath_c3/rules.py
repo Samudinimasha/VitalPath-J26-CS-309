@@ -16,7 +16,7 @@ class Rule(str, Enum):
     TS_FUTURE = "R-TS-FUTURE"
     TS_REGRESSION = "R-TS-REGRESSION"
     SEQ_JUMP = "R-SEQ-JUMP"
-    SEQ_RESYNC = "R-SEQ-RESYNC"
+    SEQ_JUMP_CONFIRMED = "R-SEQ-JUMP-CONFIRMED"
     MALFORMED_HEADER = "R-MALFORMED-HEADER"
 
 
@@ -28,6 +28,6 @@ RULE_DESCRIPTIONS = {
     Rule.TS_FUTURE: "Timestamp is further ahead of the receiver clock than the permitted skew.",
     Rule.TS_REGRESSION: "Timestamp falls behind the device's newest accepted timestamp beyond tolerance.",
     Rule.SEQ_JUMP: "Sequence number jumps further ahead than permitted; possible injection.",
-    Rule.SEQ_RESYNC: "Packet continues a previously flagged sequence jump; window resynchronised.",
+    Rule.SEQ_JUMP_CONFIRMED: "Flagged sequence jump proven authentic by decryption; window advanced.",
     Rule.MALFORMED_HEADER: "Header is missing a field or a field has an invalid type or value.",
 }
