@@ -8,6 +8,9 @@ from enum import Enum
 
 
 class Rule(str, Enum):
+    # Flood rate limiter (S8)
+    RATE_OK = "R-RATE-OK"
+    RATE_LIMIT = "R-RATE-LIMIT"
     # Replay Detection Engine (T9)
     REPLAY_ACCEPT = "R-REPLAY-ACCEPT"
     REPLAY_DUPLICATE = "R-REPLAY-DUPLICATE"
@@ -24,6 +27,8 @@ class Rule(str, Enum):
 
 
 RULE_DESCRIPTIONS = {
+    Rule.RATE_OK: "Packet rate for this device is within the permitted limit.",
+    Rule.RATE_LIMIT: "Device exceeded the permitted packet rate; excess packet discarded (flooding).",
     Rule.REPLAY_ACCEPT: "Sequence number is new and inside the replay window; timestamp is fresh.",
     Rule.REPLAY_DUPLICATE: "Sequence number was already accepted for this device.",
     Rule.REPLAY_OUTSIDE_WINDOW: "Sequence number is older than the replay window for this device.",
