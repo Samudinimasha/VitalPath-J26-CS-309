@@ -57,6 +57,16 @@ python3 -m pytest
 
 `tests/integration/test_scenarios.py` runs detection scenarios S1-S12 (proposal Table 6) through the full pipeline.
 
+## Attack demonstration
+
+One window, menu-driven: choose an attack or sensor fault and watch each engine handle it, step by step.
+
+```bash
+PYTHONPATH=src python3 -m simulator.attack_demo
+```
+
+Add `--auto` to run every scenario in turn (press Enter between them).
+
 ## Live demo
 
 Two terminals, from `component3/`. The receiver runs the full pipeline; the sender streams a real

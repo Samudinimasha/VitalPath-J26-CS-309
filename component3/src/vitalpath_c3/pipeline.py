@@ -17,12 +17,12 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 from vitalpath_c3.crypto.payload import PayloadDecryptor, PayloadError
-from vitalpath_c3.engines.correlation import CorrelationEngine
+from vitalpath_c3.engines.correlation import CorrelationEngine, CorrelationResult
 from vitalpath_c3.engines.hybrid import Decision, HybridDecisionEngine
-from vitalpath_c3.engines.rate_limiter import RateLimiter
-from vitalpath_c3.engines.replay import ReplayDetectionEngine, ReplayOutcome
-from vitalpath_c3.engines.threshold import ThresholdEngine
-from vitalpath_c3.models import EncryptedPacket
+from vitalpath_c3.engines.rate_limiter import RateLimiter, RateLimitVerdict
+from vitalpath_c3.engines.replay import ReplayDetectionEngine, ReplayOutcome, ReplayVerdict
+from vitalpath_c3.engines.threshold import ThresholdEngine, ThresholdResult
+from vitalpath_c3.models import EncryptedPacket, VitalSigns
 from vitalpath_c3.output.decision_record import DecisionRecord, MemorySink, RecordSigner
 from vitalpath_c3.rules import Rule
 
@@ -34,6 +34,13 @@ class PipelineResult:
     detail: str
     latency_ms: float
     decrypted: bool
+    # Each stage's own result, for explaining a decision step by step. A stage
+    # that was never reached is None.
+    rate_limit: Optional[RateLimitVerdict] = None
+    replay: Optional[ReplayVerdict] = None
+    vitals: Optional[VitalSigns] = None
+    threshold: Optional[ThresholdResult] = None
+    correlation: Optional[CorrelationResult] = None
 
     def explain(self) -> str:
         if self.decision is not None:
@@ -69,33 +76,34 @@ class Pipeline:
         header = packet.header
         device_id = getattr(header, "device_id", None)
 
-        admitted = self.rate_limiter.admit(device_id)
+        stages = {}
+        admitted = stages["rate_limit"] = self.rate_limiter.admit(device_id)
         if not admitted.allowed:
-            return self._finish(start, packet, None, admitted.rule, admitted.detail, decrypted=False)
+            return self._finish(start, packet, None, admitted.rule, admitted.detail, False, stages)
 
-        replay = self.replay.check(header, commit=False)
+        replay = stages["replay"] = self.replay.check(header, commit=False)
         if not replay.passed:
-            return self._finish(start, packet, None, replay.rule, replay.detail, decrypted=False)
+            return self._finish(start, packet, None, replay.rule, replay.detail, False, stages)
 
         try:
-            vitals = self.decryptor.decrypt(packet)
+            vitals = stages["vitals"] = self.decryptor.decrypt(packet)
         except PayloadError as err:
-            return self._finish(start, packet, None, err.rule, err.detail, decrypted=True)
+            return self._finish(start, packet, None, err.rule, err.detail, True, stages)
 
         # Authentic: only now does the packet use up its sequence number.
         if not self.replay.commit(header):
             return self._finish(
-                start, packet, None, Rule.REPLAY_DUPLICATE, "identical packet already processed", decrypted=True
+                start, packet, None, Rule.REPLAY_DUPLICATE, "identical packet already processed", True, stages
             )
         if replay.outcome is ReplayOutcome.ACCEPT_FLAGGED:
             self.replay.confirm_jump(header.device_id, header.seq)
 
-        decision = self.hybrid.decide(
-            replay, self.threshold.evaluate(vitals), self.correlation.evaluate(vitals)
-        )
-        return self._finish(start, packet, decision, None, "", decrypted=True)
+        threshold = stages["threshold"] = self.threshold.evaluate(vitals)
+        correlation = stages["correlation"] = self.correlation.evaluate(vitals)
+        decision = self.hybrid.decide(replay, threshold, correlation)
+        return self._finish(start, packet, decision, None, "", True, stages)
 
-    def _finish(self, start, packet, decision, discard_rule, detail, decrypted) -> PipelineResult:
+    def _finish(self, start, packet, decision, discard_rule, detail, decrypted, stages) -> PipelineResult:
         header = packet.header
         if decision is None:
             record = DecisionRecord(
@@ -120,4 +128,4 @@ class Pipeline:
         record = self.signer.sign(record)
         self.sink.append(record)
         latency_ms = (time.perf_counter() - start) * 1000
-        return PipelineResult(record, decision, detail, latency_ms, decrypted)
+        return PipelineResult(record, decision, detail, latency_ms, decrypted, **stages)
