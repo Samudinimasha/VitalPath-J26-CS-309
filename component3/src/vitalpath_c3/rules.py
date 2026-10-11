@@ -18,6 +18,9 @@ class Rule(str, Enum):
     SEQ_JUMP = "R-SEQ-JUMP"
     SEQ_JUMP_CONFIRMED = "R-SEQ-JUMP-CONFIRMED"
     MALFORMED_HEADER = "R-MALFORMED-HEADER"
+    # Payload decryption
+    DECRYPT_FAILED = "R-DECRYPT-FAILED"
+    PAYLOAD_MALFORMED = "R-PAYLOAD-MALFORMED"
 
 
 RULE_DESCRIPTIONS = {
@@ -30,4 +33,6 @@ RULE_DESCRIPTIONS = {
     Rule.SEQ_JUMP: "Sequence number jumps further ahead than permitted; possible injection.",
     Rule.SEQ_JUMP_CONFIRMED: "Flagged sequence jump proven authentic by decryption; window advanced.",
     Rule.MALFORMED_HEADER: "Header is missing a field or a field has an invalid type or value.",
+    Rule.DECRYPT_FAILED: "Payload failed authenticated decryption: altered in transit, header tampered, or wrong key.",
+    Rule.PAYLOAD_MALFORMED: "Payload decrypted but is not a well-formed vital-sign record.",
 }
