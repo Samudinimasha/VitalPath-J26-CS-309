@@ -6,5 +6,8 @@ __pycache__/
 venv/
 .DS_Store
 .vscode/
-# Raw PhysioNet downloads and generated datasets
-component3/datasets/
+# Raw downloads and generated attack datasets (curated baselines are tracked)
+component3/datasets/*
+!component3/datasets/README.md
+!component3/datasets/mimic3wdb_*.csv
+!component3/datasets/bidmc_*.csv
