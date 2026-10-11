@@ -21,8 +21,8 @@ _NS = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 # Output column -> source header. Blood pressure uses the non-invasive cuff
 # (NBP), which is what an ambulance monitor provides.
 PROFILES = {
-    # MIMIC-III Waveform Database record 30000n: 0 means no reading.
-    "mimic3wdb-30000n": {
+    # MIMIC-III Waveform Database record 3000003n: 0 means no reading.
+    "mimic3wdb-3000003n": {
         "zero_is_missing": True,
         "columns": {"hr": "HR", "pulse": "PULSE", "spo2": "SpO2",
                     "sbp": "NBPSys", "dbp": "NBPDias", "resp": "RESP"},
