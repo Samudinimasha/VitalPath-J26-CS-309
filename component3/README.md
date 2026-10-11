@@ -54,3 +54,22 @@ Sequence numbers are unsigned 64-bit; wraparound is not handled.
 cd component3
 python3 -m pytest
 ```
+
+`tests/integration/test_scenarios.py` runs detection scenarios S1-S12 (proposal Table 6) through the full pipeline.
+
+## Live demo
+
+Two terminals, from `component3/`. The receiver runs the full pipeline; the sender streams a real
+PhysioNet recording (encrypted) and, with `--attacks`, injects replays, a handover, sensor faults,
+forged and tampered packets, and a flood.
+
+```bash
+PYTHONPATH=src python3 -m simulator.receiver --explain
+```
+
+```bash
+PYTHONPATH=src python3 -m simulator.sender --attacks --start 60
+```
+
+`--start 60` skips the first minute of bidmc53n, where the patient's respiratory rate is high and
+most genuine packets are flagged. Stop each with Ctrl+C; the receiver prints a summary.
