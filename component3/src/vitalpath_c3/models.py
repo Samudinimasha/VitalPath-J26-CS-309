@@ -1,6 +1,7 @@
 """Data shapes shared across Component 3 engines."""
 
 from dataclasses import dataclass
+from typing import Optional
 
 # Sequence numbers are unsigned 64-bit counters; wraparound is not handled.
 SEQ_MAX = 2**64 - 1
@@ -19,6 +20,18 @@ class PacketHeader:
     device_id: object
     seq: object
     timestamp: object
+
+
+@dataclass(frozen=True)
+class VitalSigns:
+    """Decrypted vital-sign readings from one packet. None means no reading
+    (sensor disconnected or not measured in this packet)."""
+
+    hr: Optional[float] = None
+    spo2: Optional[float] = None
+    sbp: Optional[float] = None
+    dbp: Optional[float] = None
+    resp: Optional[float] = None
 
 
 @dataclass(frozen=True)

@@ -1,0 +1,76 @@
+{
+  "_about": "Clinical threshold table for the Threshold-Based Anomaly Detection Engine (T10). Adult values. Each rule is inclusive unless it says min_exclusive or max_exclusive. A value matching no rule is 'borderline': no guideline defines a borderline band, so borderline is the gap between published normal and critical limits (state this in Section 3.2). Set 'verified' to true once the number has been checked against the primary source.",
+  "sources": {
+    "AHA-HR": {
+      "citation": "American Heart Association, 'All About Heart Rate (Pulse)', last reviewed 13 May 2024.",
+      "url": "https://www.heart.org/en/health-topics/high-blood-pressure/the-facts-about-high-blood-pressure/all-about-heart-rate-pulse",
+      "verified": false
+    },
+    "NEWS2": {
+      "citation": "Royal College of Physicians, National Early Warning Score (NEWS) 2, London: RCP, 2017.",
+      "url": "https://www.rcplondon.ac.uk/projects/outputs/national-early-warning-score-news-2",
+      "verified": false
+    },
+    "WHO-SPO2": {
+      "citation": "World Health Organization, Pulse Oximetry Training Manual, WHO Patient Safety, 2011.",
+      "url": "",
+      "verified": false
+    },
+    "ESC-2024": {
+      "citation": "McEvoy JW et al., 2024 ESC Guidelines for the management of elevated blood pressure and hypertension, Eur Heart J 2024;45(38):3912-4018.",
+      "url": "https://academic.oup.com/eurheartj/article/45/44/4682/7823549",
+      "verified": false
+    },
+    "ACC-AHA-2017": {
+      "citation": "Whelton PK et al., 2017 ACC/AHA Guideline for the Prevention, Detection, Evaluation, and Management of High Blood Pressure in Adults, Hypertension, doi:10.1161/HYP.0000000000000065.",
+      "url": "https://www.acc.org/about-acc/press-releases/2017/11/13/15/35/high-blood-pressure-redefined-for-first-time-in-14-years-130-is-the-new-high",
+      "verified": false
+    }
+  },
+  "vitals": {
+    "hr": {
+      "label": "Heart rate (ECG-derived)",
+      "unit": "bpm",
+      "rules": [
+        {"id": "R-HR-CRIT-LOW", "band": "critical", "max": 40, "source": "NEWS2"},
+        {"id": "R-HR-NORMAL", "band": "normal", "min": 60, "max": 100, "source": "AHA-HR"},
+        {"id": "R-HR-CRIT-HIGH", "band": "critical", "min": 131, "source": "NEWS2"}
+      ]
+    },
+    "spo2": {
+      "label": "Oxygen saturation",
+      "unit": "%",
+      "rules": [
+        {"id": "R-SPO2-CRIT-LOW", "band": "critical", "max": 90, "max_exclusive": true, "source": "WHO-SPO2"},
+        {"id": "R-SPO2-NORMAL", "band": "normal", "min": 95, "source": "WHO-SPO2"}
+      ]
+    },
+    "sbp": {
+      "label": "Systolic blood pressure",
+      "unit": "mmHg",
+      "rules": [
+        {"id": "R-SBP-CRIT-LOW", "band": "critical", "max": 90, "source": "NEWS2"},
+        {"id": "R-SBP-NORMAL", "band": "normal", "min": 111, "max": 139, "source": "NEWS2; ESC-2024"},
+        {"id": "R-SBP-CRIT-HIGH", "band": "critical", "min": 180, "min_exclusive": true, "source": "ACC-AHA-2017"}
+      ]
+    },
+    "dbp": {
+      "label": "Diastolic blood pressure",
+      "unit": "mmHg",
+      "_note": "No published low-diastolic cut-off was found, so low diastolic values are not scored.",
+      "rules": [
+        {"id": "R-DBP-NORMAL", "band": "normal", "max": 90, "max_exclusive": true, "source": "ESC-2024"},
+        {"id": "R-DBP-CRIT-HIGH", "band": "critical", "min": 120, "min_exclusive": true, "source": "ACC-AHA-2017"}
+      ]
+    },
+    "resp": {
+      "label": "Respiratory rate",
+      "unit": "/min",
+      "rules": [
+        {"id": "R-RESP-CRIT-LOW", "band": "critical", "max": 8, "source": "NEWS2"},
+        {"id": "R-RESP-NORMAL", "band": "normal", "min": 12, "max": 20, "source": "NEWS2"},
+        {"id": "R-RESP-CRIT-HIGH", "band": "critical", "min": 25, "source": "NEWS2"}
+      ]
+    }
+  }
+}
