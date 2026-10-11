@@ -32,6 +32,9 @@ class VitalSigns:
     sbp: Optional[float] = None
     dbp: Optional[float] = None
     resp: Optional[float] = None
+    # Pulse rate from the oximeter; not thresholded, used by the correlation
+    # engine to cross-check the ECG-derived heart rate.
+    pulse: Optional[float] = None
 
 
 @dataclass(frozen=True)
