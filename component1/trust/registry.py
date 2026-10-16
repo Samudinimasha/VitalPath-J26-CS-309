@@ -72,6 +72,12 @@ class DeviceRegistry:
         ).fetchone()
         return DeviceRecord(**dict(row)) if row else None
 
+    def find_by_hardware_id(self, hardware_id: str) -> DeviceRecord | None:
+        row = self.conn.execute(
+            "SELECT * FROM authorised_devices WHERE hardware_id = ?", (hardware_id,)
+        ).fetchone()
+        return DeviceRecord(**dict(row)) if row else None
+
     def is_authorised(self, device_id: str) -> tuple[bool, str]:
         """Pre-scoring gate. Returns (allowed, reason)."""
         rec = self.lookup(device_id)
