@@ -19,7 +19,7 @@ parallel (fan-out), so no component can stall another:
 | 1 | Device Identity & Trust Verification | Authenticates medical devices (certificates, fingerprinting) and computes a Trusted Device Score |
 | 2 | Adaptive Secure Transmission | Encrypts and signs telemetry (DTLS 1.3, ECDSA, SHA-256) for transmission |
 | 3 | Telemetry Anomaly & Replay Detection Engine | Detects replayed packets and physiologically impossible or inconsistent vital signs in real time |
-| 4 | Forensic Ledger & Emergency Access Control | Records verdicts in a tamper-evident Merkle-chain ledger and enforces role- and context-aware access, including break-glass misuse detection |
+| 4 | Context-Aware Emergency Access Control and Break-Glass Misuse Detection Engine | Evaluates hospital-user access requests using contextual authorization, Access Risk Scoring, controlled emergency access and rule-based misuse detection. |
 
 ## Design principles
 
