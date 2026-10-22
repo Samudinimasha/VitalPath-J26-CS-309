@@ -62,3 +62,17 @@ class AccessLog(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=utc_now
     )
+
+class UserCredential(Base):
+    __tablename__ = "user_credentials"
+
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id"),
+        primary_key=True,
+    )
+    password_hash: Mapped[str] = mapped_column(
+        String, nullable=False
+    )
+    active: Mapped[bool] = mapped_column(
+        Boolean, default=True, nullable=False
+    )

@@ -11,12 +11,18 @@ from app.schemas import AccessRequest, AccessResponse
 from app.services.risk_engine import calculate_ars
 from app.services.policy_engine import evaluate_policy
 
+
+from app.models import UserCredential
+from app.routes.auth import router as auth_router
+from app.services.authentication import get_current_user
+
+
 app = FastAPI(
     title="VitalPath Component 4",
     description="Context-Aware Emergency Access Control Prototype",
     version="0.1.0",
 )
-
+app.include_router(auth_router)
 
 def seed_database():
     """Create synthetic demonstration data once."""
@@ -88,16 +94,14 @@ def home():
     }
 
 
+
 @app.post("/access/evaluate", response_model=AccessResponse)
 def evaluate_access(
     request: AccessRequest,
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    user = db.get(User, request.user_id)
-    if user is None:
-        raise HTTPException(
-            status_code=404, detail="Unknown user"
-        )
+
 
     case = db.get(EmergencyCase, request.case_id)
     if case is None:
@@ -146,10 +150,22 @@ def evaluate_access(
     )
 
 
+
 @app.get("/access/history")
-def access_history(db: Session = Depends(get_db)):
+def access_history(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    if current_user.role != "ADMIN":
+        raise HTTPException(
+            status_code=403,
+            detail="Audit reviewer access required",
+        )
+
     logs = db.scalars(
-        select(AccessLog).order_by(AccessLog.id.desc())
+        select(AccessLog).order_by(
+            AccessLog.id.desc()
+        )
     ).all()
 
     return [
@@ -165,3 +181,4 @@ def access_history(db: Session = Depends(get_db)):
         }
         for log in logs
     ]
+
