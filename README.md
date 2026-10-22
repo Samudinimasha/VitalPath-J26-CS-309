@@ -35,7 +35,7 @@ parallel (fan-out), so no component can stall another:
 
 | Folder | Component |
 |--------|-----------|
-| [`component3/`](component3/) | Telemetry Anomaly & Replay Detection Engine |
+| `component3/` (on branch [`feature/component3`](../../tree/feature/component3/component3)) | Telemetry Anomaly & Replay Detection Engine |
 
 ## Project
 
