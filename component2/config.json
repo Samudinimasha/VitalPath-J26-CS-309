@@ -1,0 +1,33 @@
+{
+  "sps_weights": {
+    "w_dts": 0.35,
+    "w_cc": 0.45,
+    "w_nc": 0.20
+  },
+  "profile_thresholds": {
+    "standard_max": 0.40,
+    "enhanced_max": 0.75
+  },
+  "clinical_scores": {
+    "normal": 0.2,
+    "borderline": 0.6,
+    "critical": 1.0
+  },
+  "clinical_ranges": {
+    "hr": { "normal_min": 60, "normal_max": 100, "critical_min": 50, "critical_max": 120 },
+    "spo2": { "normal_min": 95, "critical_min": 90 },
+    "bp_sys": { "normal_min": 90, "normal_max": 120, "critical_min": 80, "critical_max": 140 },
+    "bp_dia": { "normal_min": 60, "normal_max": 80, "critical_min": 50, "critical_max": 90 },
+    "rr": { "normal_min": 12, "normal_max": 20, "critical_min": 10, "critical_max": 24 }
+  },
+  "network_ranges": {
+    "rtt_ms": { "good_max": 30, "poor_min": 100 },
+    "packet_loss_pct": { "good_max": 1.0, "poor_min": 5.0 }
+  },
+  "key_rotation_seconds": {
+    "Standard": 300,
+    "Enhanced": 60,
+    "Maximum": 10
+  },
+  "default_dts_fallback": 0.70
+}
