@@ -3,16 +3,19 @@ VitalPath: 5G Security Middleware for Connected Ambulance Telemetry
 Component 2: Clinical Telemetry Ingestion (dataset_loader.py)
 
 This module ingests real clinical datasets from PhysioNet MIMIC-III (shared with Component 3):
-  1. '../data.xlsx'   (2,519 records: HR, ABPSys, ABPDias, RESP, SpO2, NBPSys, NBPDias)
-  2. '../data 2.xlsx' (1,759 records: HR, NBP SYS, NBP DIAS, RESP, %SpO2, AWRR)
+  1. '../data.xlsx'   (2,519 records: HR, PULSE, ABPSys, ABPDias, RESP, SpO2, NBPSys, NBPDias)
+  2. '../data 2.xlsx' (1,759 records: HR, PULSE, NBP SYS, NBP DIAS, RESP, %SpO2, AWRR)
   3. '../data 3.xlsx' (481 records: HR, PULSE, RESP, SpO2)
 
-Aligns and normalizes features into canonical VitalPath telemetry packets:
-  - 'hr'     : Heart Rate (bpm)
-  - 'spo2'   : Peripheral Capillary Oxygen Saturation (%)
-  - 'bp_sys' : Systolic Blood Pressure (mmHg)
-  - 'bp_dia' : Diastolic Blood Pressure (mmHg)
-  - 'rr'     : Respiratory Rate (breaths/min)
+Aligns and formats features into the exact JSON schema expected by Component 3:
+  {
+    "hr": 84,
+    "pulse": 83,
+    "spo2": 97,
+    "sbp": 122,
+    "dbp": 79,
+    "resp": 16
+  }
 """
 
 import os
@@ -25,7 +28,7 @@ from typing import List, Dict, Any, Optional
 def load_mimic_clinical_data(parent_dir: str = "..") -> pd.DataFrame:
     """
     Loads, cleans, and merges the 3 MIMIC-III Excel files from the parent research folder.
-    Returns a unified Pandas DataFrame with canonical clinical columns.
+    Returns a unified Pandas DataFrame with canonical clinical columns including pulse, sbp, dbp, resp.
     """
     file1 = os.path.join(parent_dir, "data.xlsx")
     file2 = os.path.join(parent_dir, "data 2.xlsx")
@@ -40,12 +43,17 @@ def load_mimic_clinical_data(parent_dir: str = "..") -> pd.DataFrame:
         bp_sys1 = df1["ABPSys"].replace(0, np.nan).combine_first(df1["NBPSys"]).ffill().bfill().fillna(120.0)
         bp_dia1 = df1["ABPDias"].replace(0, np.nan).combine_first(df1["NBPDias"]).ffill().bfill().fillna(80.0)
         hr1 = df1["HR"].replace(0, np.nan).combine_first(df1["PULSE"]).ffill().bfill().fillna(75.0)
+        pulse1 = df1["PULSE"].replace(0, np.nan).combine_first(df1["HR"]).ffill().bfill().fillna(hr1)
         spo21 = df1["SpO2"].replace(0, np.nan).ffill().bfill().fillna(98.0)
         resp1 = df1["RESP"].replace(0, np.nan).ffill().bfill().fillna(16.0)
 
         frames.append(pd.DataFrame({
             "hr": hr1,
+            "pulse": pulse1,
             "spo2": spo21,
+            "sbp": bp_sys1,
+            "dbp": bp_dia1,
+            "resp": resp1,
             "bp_sys": bp_sys1,
             "bp_dia": bp_dia1,
             "rr": resp1,
@@ -60,12 +68,17 @@ def load_mimic_clinical_data(parent_dir: str = "..") -> pd.DataFrame:
         bp_sys2 = df2["NBP SYS"].ffill().bfill().fillna(120.0)
         bp_dia2 = df2["NBP DIAS"].ffill().bfill().fillna(80.0)
         hr2 = df2["HR"].combine_first(df2["PULSE"]).ffill().bfill().fillna(75.0)
+        pulse2 = df2["PULSE"].combine_first(df2["HR"]).ffill().bfill().fillna(hr2)
         spo22 = df2["%SpO2"].ffill().bfill().fillna(98.0)
         resp2 = df2["RESP"].combine_first(df2["AWRR"]).ffill().bfill().fillna(16.0)
 
         frames.append(pd.DataFrame({
             "hr": hr2,
+            "pulse": pulse2,
             "spo2": spo22,
+            "sbp": bp_sys2,
+            "dbp": bp_dia2,
+            "resp": resp2,
             "bp_sys": bp_sys2,
             "bp_dia": bp_dia2,
             "rr": resp2,
@@ -80,12 +93,17 @@ def load_mimic_clinical_data(parent_dir: str = "..") -> pd.DataFrame:
         # Strip extraneous whitespace and trailing commas from header names
         df3.columns = [c.strip().rstrip(",") for c in df3.columns]
         hr3 = df3["HR"].combine_first(df3["PULSE"]).ffill().bfill().fillna(75.0)
+        pulse3 = df3["PULSE"].combine_first(df3["HR"]).ffill().bfill().fillna(hr3)
         spo23 = df3["SpO2"].ffill().bfill().fillna(98.0)
         resp3 = df3["RESP"].ffill().bfill().fillna(16.0)
 
         frames.append(pd.DataFrame({
             "hr": hr3,
+            "pulse": pulse3,
             "spo2": spo23,
+            "sbp": 120.0,
+            "dbp": 80.0,
+            "resp": resp3,
             "bp_sys": 120.0,
             "bp_dia": 80.0,
             "rr": resp3,
@@ -109,6 +127,7 @@ def build_telemetry_stream(
     """
     Transforms the clinical dataset into VitalPath telemetry packets coupled with
     simulated vehicular 5G network channels and Component 1 Device Trust Scores.
+    Ensures 'vitals' matches the exact schema expected by Component 3.
     """
     random.seed(seed)
     np.random.seed(seed)
@@ -128,18 +147,16 @@ def build_telemetry_stream(
     telemetry_stream = []
 
     for i, row in clinical_df.iterrows():
-        # Assign sensor device
         dev = random.choice(device_catalog)
 
-        # Clean individual vital readings
         hr = float(row["hr"])
+        pulse = float(row["pulse"])
         spo2 = float(row["spo2"])
-        bp_sys = float(row["bp_sys"])
-        bp_dia = float(row["bp_dia"])
-        rr = float(row["rr"])
+        sbp = float(row["sbp"])
+        dbp = float(row["dbp"])
+        resp = float(row["resp"])
 
-        # Simulated 5G channel profile (incorporating vehicular mobility)
-        # 70% clean 5G link, 20% moderate channel congestion, 10% cellular handover burst
+        # Simulated 5G channel profile
         net_roll = random.random()
         if net_roll < 0.70:
             rtt = float(np.random.uniform(12.0, 28.0))
@@ -161,11 +178,16 @@ def build_telemetry_stream(
             "device_trust": dev["trust"],
             "source_dataset": row["source_dataset"],
             "vitals": {
-                "hr": round(hr, 1),
-                "spo2": round(spo2, 1),
-                "bp_sys": round(bp_sys, 1),
-                "bp_dia": round(bp_dia, 1),
-                "rr": round(rr, 1),
+                "hr": int(round(hr)),
+                "pulse": int(round(pulse)),
+                "spo2": int(round(spo2)),
+                "sbp": int(round(sbp)),
+                "dbp": int(round(dbp)),
+                "resp": int(round(resp)),
+                # Legacy aliases for Component 2 internal backward compatibility
+                "bp_sys": int(round(sbp)),
+                "bp_dia": int(round(dbp)),
+                "rr": int(round(resp)),
             },
         }
 
@@ -181,15 +203,11 @@ def build_telemetry_stream(
 
 
 if __name__ == "__main__":
-    print("[+] Loading real MIMIC clinical datasets from parent directory...")
+    print("[+] Loading real MIMIC clinical datasets with pulse factor...")
     df = load_mimic_clinical_data("..")
-    print(f"  Successfully merged {len(df):,} patient records across 3 Excel files.")
-    print("\nDataset Composition:")
-    print(df["source_dataset"].value_counts().to_string())
-
-    print("\nClinical Vital Distributions:")
-    print(df[["hr", "spo2", "bp_sys", "bp_dia", "rr"]].describe().round(2))
-
+    print(f"  Successfully loaded {len(df):,} patient records across 3 Excel files.")
+    
     stream = build_telemetry_stream(clinical_df=df)
-    print(f"\n[+] Generated {len(stream):,} complete telemetry packets with 5G metrics and device trust.")
-
+    sample_vitals = stream[0]["packet"]["vitals"]
+    print("\nSample Vital Signs Schema (Component 3 format):")
+    print({k: sample_vitals[k] for k in ["hr", "pulse", "spo2", "sbp", "dbp", "resp"]})

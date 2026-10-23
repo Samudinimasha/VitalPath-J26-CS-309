@@ -9,6 +9,8 @@ def load_config(config_path="config.json"):
 def get_clinical_criticality(vitals, config):
     """
     Evaluates vital signs against AHA, WHO, and ESC clinical thresholds.
+    Accepts canonical Component 3 schema ({hr, pulse, spo2, sbp, dbp, resp})
+    as well as Component 2 aliases ({bp_sys, bp_dia, rr}).
     Returns:
         0.2 for Normal
         0.6 for Borderline
@@ -17,11 +19,11 @@ def get_clinical_criticality(vitals, config):
     ranges = config["clinical_ranges"]
     scores = config["clinical_scores"]
     
-    hr = vitals.get("hr", 75)
+    hr = vitals.get("hr", vitals.get("pulse", 75))
     spo2 = vitals.get("spo2", 98)
-    bp_sys = vitals.get("bp_sys", 120)
-    bp_dia = vitals.get("bp_dia", 80)
-    rr = vitals.get("rr", 16)
+    bp_sys = vitals.get("sbp", vitals.get("bp_sys", 120))
+    bp_dia = vitals.get("dbp", vitals.get("bp_dia", 80))
+    rr = vitals.get("resp", vitals.get("rr", 16))
 
     # 1. Check for life-critical anomalies first
     if (hr < ranges["hr"]["critical_min"] or hr > ranges["hr"]["critical_max"] or
