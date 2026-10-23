@@ -32,7 +32,6 @@ from vitalpath_c3.pipeline import Pipeline
 DEVICE = "MON-01"  # the ambulance's patient monitor
 CASE = "CASE001"  # emergency case from (simulated) dispatch
 UNIT = "AMB-07"
-REASON = "cardiac arrest"
 GREEN, YELLOW, RED, BOLD, DIM, RESET = "\033[32m", "\033[33m", "\033[31m", "\033[1m", "\033[2m", "\033[0m"
 
 WHY_DISCARDED = {
@@ -290,7 +289,7 @@ def main() -> None:
 
     demo = Demo(args.data, args.start)
     print(f"{BOLD}VitalPath Component 3: attack demonstration{RESET}")
-    print(f"{DIM}Dispatch (simulated): {CASE} · {REASON} · {UNIT} assigned.{RESET}")
+    print(f"{DIM}Dispatch (simulated): {CASE} · {UNIT} assigned.{RESET}")
     print(f"{DIM}{UNIT}'s patient monitor {DEVICE} streams real vitals from {args.data}, "
           f"encrypted and tagged {CASE}.{RESET}")
 

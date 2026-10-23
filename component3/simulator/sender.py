@@ -140,7 +140,6 @@ def main() -> None:
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--device", default="MON-01", help="patient monitor sending the packets")
     parser.add_argument("--case", default="CASE001", help="emergency case ID from dispatch")
-    parser.add_argument("--reason", default="cardiac arrest", help="dispatch reason (display only)")
     parser.add_argument("--unit", default="AMB-07", help="ambulance (display only)")
     parser.add_argument("--data", default="datasets/bidmc_53n.csv", help="PhysioNet CSV to stream")
     parser.add_argument("--start", type=int, default=0, help="row of the recording to start from")
@@ -153,7 +152,7 @@ def main() -> None:
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     amb = Ambulance(sock, (args.host, args.port), args.device, 1.0 / args.rate,
                     endless_vitals(args.data, args.start), args.case)
-    print(f"Dispatch: {args.case} · {args.reason} · {args.unit} assigned (simulated)")
+    print(f"Dispatch: {args.case} · {args.unit} assigned (simulated)")
     events = itertools.cycle(ATTACKS)
     print(f"Streaming {args.data} as {args.device} to udp://{args.host}:{args.port} at {args.rate} pkt/s"
           f"{' with attacks' if args.attacks else ''}  (Ctrl+C to stop)")
