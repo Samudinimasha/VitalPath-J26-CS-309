@@ -1,6 +1,7 @@
 """Unit tests for payload sealing and decryption (AES-GCM stand-in for Component 2)."""
 
 import dataclasses
+import json
 import os
 import time
 
@@ -97,6 +98,38 @@ def test_short_payload_is_malformed(decryptor):
 def test_non_object_plaintext_is_malformed(decryptor, plaintext):
     with pytest.raises(PayloadError) as err:
         decryptor.decrypt(raw_packet(plaintext))
+    assert err.value.rule is Rule.PAYLOAD_MALFORMED
+
+
+def test_component2_packet_layout_is_read(decryptor):
+    """Thamindu's example plaintext from component2/crypto_engine.py."""
+    plaintext = (
+        b'{"patient_id": "AMB_PAT_1042", "device_id": "sensor_ecg_01", '
+        b'"vitals": {"hr": 84, "spo2": 97, "bp_sys": 122, "bp_dia": 79, "rr": 16}}'
+    )
+    assert decryptor.decrypt(raw_packet(plaintext)) == VitalSigns(hr=84, spo2=97, sbp=122, dbp=79, resp=16)
+
+
+def test_pulse_is_kept_in_component2_layout(decryptor):
+    plaintext = b'{"vitals": {"hr": 84, "pulse": 83, "spo2": 97}}'
+    assert decryptor.decrypt(raw_packet(plaintext)) == VitalSigns(hr=84, pulse=83, spo2=97)
+
+
+def test_seal_writes_component2_layout():
+    packet = seal(HEADER, VITALS, KEY)
+    nonce, body = packet.payload[:NONCE_BYTES], packet.payload[NONCE_BYTES:]
+    obj = json.loads(AESGCM(KEY).decrypt(nonce, body, header_aad(HEADER)))
+    assert obj == {"vitals": {"hr": 82.5, "pulse": 81.0, "spo2": 97.0, "bp_sys": 121.0, "bp_dia": 79.0, "rr": 16.0}}
+
+
+def test_unknown_vital_names_in_component2_layout_ignored(decryptor):
+    plaintext = b'{"vitals": {"hr": 84, "temp": 37.0, "sbp": 120}}'
+    assert decryptor.decrypt(raw_packet(plaintext)) == VitalSigns(hr=84)
+
+
+def test_vitals_not_an_object_is_malformed(decryptor):
+    with pytest.raises(PayloadError) as err:
+        decryptor.decrypt(raw_packet(b'{"vitals": [84, 97]}'))
     assert err.value.rule is Rule.PAYLOAD_MALFORMED
 
 

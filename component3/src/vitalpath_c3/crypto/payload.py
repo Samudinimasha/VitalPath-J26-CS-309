@@ -9,7 +9,16 @@ That is what lets the pipeline trust a flagged sequence jump once its payload
 decrypts (see ReplayDetectionEngine.confirm_jump).
 
 Wire layout of the sealed payload: 12-byte nonce || ciphertext || 16-byte tag.
-The plaintext is a JSON object of vital signs, e.g. {"hr": 82.0, "spo2": 97}.
+The plaintext uses Component 2's layout: vital signs inside a "vitals" object,
+with Component 2's names (bp_sys, bp_dia, rr), plus pulse when the monitor
+provides it, e.g.
+
+    {"vitals": {"hr": 84, "pulse": 83, "spo2": 97, "bp_sys": 122, "bp_dia": 79, "rr": 16}}
+
+Other top-level keys Component 2 adds (patient_id, device_id) are ignored.
+The older flat layout using Component 3's own names ({"hr": 84, "sbp": 122, ...})
+is still accepted. Inside Component 3 the vitals keep their own names
+(VitalSigns: sbp, dbp, resp), so no engine or rule changes.
 
 Only Component 3 decrypts, and only for packets that passed the replay gate.
 """
@@ -27,6 +36,17 @@ from vitalpath_c3.rules import Rule
 
 NONCE_BYTES = 12
 _VITAL_FIELDS = {f.name for f in fields(VitalSigns)}
+
+# Component 2's vital names -> Component 3's VitalSigns fields.
+C2_VITAL_NAMES = {
+    "hr": "hr",
+    "pulse": "pulse",
+    "spo2": "spo2",
+    "bp_sys": "sbp",
+    "bp_dia": "dbp",
+    "rr": "resp",
+}
+_TO_C2_NAMES = {ours: theirs for theirs, ours in C2_VITAL_NAMES.items()}
 
 
 class PayloadError(Exception):
@@ -48,7 +68,11 @@ def header_aad(header: PacketHeader) -> bytes:
 def seal(header: PacketHeader, vitals: VitalSigns, key: bytes) -> EncryptedPacket:
     """Encrypt vitals for a header. Used by the simulator and tests in place of Component 2."""
     plaintext = json.dumps(
-        {name: getattr(vitals, name) for name in _VITAL_FIELDS if getattr(vitals, name) is not None}
+        {"vitals": {
+            _TO_C2_NAMES[name]: getattr(vitals, name)
+            for name in _TO_C2_NAMES
+            if getattr(vitals, name) is not None
+        }}
     ).encode()
     nonce = os.urandom(NONCE_BYTES)
     ciphertext = AESGCM(key).encrypt(nonce, plaintext, header_aad(header))
@@ -85,4 +109,9 @@ class PayloadDecryptor:
             raise PayloadError(Rule.PAYLOAD_MALFORMED, "plaintext is not a JSON object")
         # Unknown keys are ignored; value checks are left to the engines so that
         # a bad reading is reported against its own vital.
+        if "vitals" in obj:
+            vitals = obj["vitals"]
+            if not isinstance(vitals, dict):
+                raise PayloadError(Rule.PAYLOAD_MALFORMED, '"vitals" is not a JSON object')
+            return VitalSigns(**{C2_VITAL_NAMES[k]: v for k, v in vitals.items() if k in C2_VITAL_NAMES})
         return VitalSigns(**{k: v for k, v in obj.items() if k in _VITAL_FIELDS})
