@@ -29,5 +29,11 @@
     "Enhanced": 60,
     "Maximum": 10
   },
+  "trust_database": {
+    "enabled": true,
+    "db_path": "trust.db",
+    "table_name": "trust_verdicts",
+    "cache_ttl_seconds": 60
+  },
   "default_dts_fallback": 0.70
 }

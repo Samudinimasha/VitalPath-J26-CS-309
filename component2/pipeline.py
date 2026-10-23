@@ -21,6 +21,7 @@ from typing import Dict, Any, Optional, List, Tuple
 from classifiers import load_config
 from sps_engine import SPSEngine
 from crypto_engine import CryptoEngine
+from trust_client import TrustVerdictClient, TrustVerdict
 
 
 class MetadataLogger:
@@ -88,13 +89,14 @@ class VitalPathPipeline:
         config: Optional[Dict[str, Any]] = None,
         config_path: str = "config.json",
         enable_async_logging: bool = True,
+        trust_client: Optional[TrustVerdictClient] = None,
     ):
         if config is not None:
             self.config = config
         else:
             self.config = load_config(config_path)
 
-        self.sps_engine = SPSEngine(config=self.config)
+        self.sps_engine = SPSEngine(config=self.config, trust_client=trust_client)
         self.crypto_engine = CryptoEngine(config=self.config)
         self.logger = MetadataLogger() if enable_async_logging else None
 

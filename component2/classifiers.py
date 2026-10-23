@@ -1,4 +1,5 @@
 import json
+from typing import Optional, Dict, Any
 
 def load_config(config_path="config.json"):
     """Loads weights and threshold boundaries from the configuration file."""
@@ -78,10 +79,30 @@ def get_network_condition(network_metrics, config):
 
     return round(combined_nc, 3)
 
-def get_device_trust(device_id, trust_cache, config):
+def get_device_trust(
+    device_id: str,
+    trust_cache: Optional[Dict[str, float]] = None,
+    config: Optional[Dict[str, Any]] = None,
+    trust_client: Any = None,
+) -> float:
     """
-    Asynchronously looks up the latest Device Trust Score (DTS) from Component 1's cache.
-    Falls back to a safe default if Component 1 has not evaluated the device yet.
+    Looks up the latest Device Trust Score (DTS) using:
+      1. Active in-memory trust cache (sub-millisecond fast path)
+      2. Shared SQLite database via TrustVerdictClient (if configured/provided)
+      3. Safe fallback default (default_dts_fallback, default 0.70)
     """
-    fallback = config.get("default_dts_fallback", 0.70)
-    return trust_cache.get(device_id, fallback)
+    cfg = config or {}
+    fallback = cfg.get("default_dts_fallback", 0.70)
+
+    # Fast path: check in-memory cache
+    if trust_cache is not None and device_id in trust_cache:
+        return float(trust_cache[device_id])
+
+    # Secondary path: check shared SQLite database if client provided
+    if trust_client is not None:
+        try:
+            return float(trust_client.get_trust_score(device_id))
+        except Exception:
+            return fallback
+
+    return fallback

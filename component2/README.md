@@ -12,7 +12,6 @@ $$\text{SPS} = w_{\text{dts}} \cdot (1.0 - \text{DTS}) + w_{\text{cc}} \cdot \te
 * **$w_{\text{dts}} = 0.35$**: Device Trust Score ($\text{DTS} \in [0.0, 1.0]$) consumed from Component 1 cache. Inverted as $(1.0 - \text{DTS})$ so untrusted devices elevate security priority.
 * **$w_{\text{cc}} = 0.45$**: Clinical Criticality ($\text{CC} \in \{0.2, 0.6, 1.0\}$) based on AHA/WHO/ESC guideline boundaries.
 * **$w_{\text{nc}} = 0.20$**: 5G Network Conditions ($\text{NC} \in [0.0, 1.0]$) modeling latency (RTT), packet loss, and cellular handover penalties.
-* *Note: External threat level is strictly excluded from SPS calculation to preserve deterministic real-time processing.*
 
 ---
 
@@ -72,3 +71,4 @@ python benchmark_evaluation.py
 # 4. Run end-to-end telemetry pipeline demo
 python pipeline.py
 ```
+

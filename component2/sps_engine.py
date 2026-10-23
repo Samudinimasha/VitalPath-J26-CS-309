@@ -25,6 +25,7 @@ from classifiers import (
     get_network_condition,
     get_device_trust,
 )
+from trust_client import TrustVerdictClient, TrustVerdict
 
 
 def calculate_sps(
@@ -110,14 +111,15 @@ def evaluate_security_decision(
     vitals: Dict[str, Any],
     network_metrics: Dict[str, Any],
     device_id: str,
-    trust_cache: Dict[str, float],
+    trust_cache: Optional[Dict[str, float]] = None,
     config: Optional[Dict[str, Any]] = None,
+    trust_client: Optional[TrustVerdictClient] = None,
 ) -> Dict[str, Any]:
     """
     End-to-end evaluation for an incoming telemetry packet:
       1. Evaluates Clinical Criticality (CC) from vital signs.
       2. Evaluates Network Condition (NC) from 5G channel metrics.
-      3. Retrieves Device Trust Score (DTS) from Component 1 cache.
+      3. Retrieves latest valid Device Trust Score (DTS) from Component 1 cache or SQLite DB.
       4. Calculates the deterministic SPS.
       5. Maps SPS to the appropriate cryptographic profile.
       6. Records decision latency (target < 5 ms).
@@ -126,8 +128,9 @@ def evaluate_security_decision(
         vitals (dict): Dictionary of vital sign readings (hr, spo2, bp_sys, bp_dia, rr).
         network_metrics (dict): 5G network metrics (rtt_ms, packet_loss_pct, handover_active).
         device_id (str): Unique identifier of the sensor device.
-        trust_cache (dict): In-memory cache mapping device IDs to Component 1 trust scores.
+        trust_cache (dict, optional): In-memory cache mapping device IDs to Component 1 trust scores.
         config (dict, optional): Loaded configuration dictionary.
+        trust_client (TrustVerdictClient, optional): Client to query shared SQLite verdicts DB.
 
     Returns:
         dict: Full decision metadata including SPS, profile, factors, key rotation, and latency.
@@ -140,7 +143,17 @@ def evaluate_security_decision(
     # Step 1: Extract the three input factors
     cc = get_clinical_criticality(vitals, config)
     nc = get_network_condition(network_metrics, config)
-    dts = get_device_trust(device_id, trust_cache, config)
+    
+    # Retrieve DTS (In-memory cache -> SQLite DB -> Fallback)
+    verdict_meta: Optional[Dict[str, Any]] = None
+    if trust_cache is not None and device_id in trust_cache:
+        dts = float(trust_cache[device_id])
+    elif trust_client is not None:
+        verdict = trust_client.get_latest_verdict(device_id)
+        dts = verdict.trust_score
+        verdict_meta = verdict.to_dict()
+    else:
+        dts = get_device_trust(device_id, trust_cache, config)
 
     # Step 2: Compute deterministic SPS
     sps = calculate_sps(dts=dts, cc=cc, nc=nc, config=config)
@@ -158,7 +171,7 @@ def evaluate_security_decision(
 
     elapsed_ms = (time.perf_counter() - start_time) * 1000.0
 
-    return {
+    res = {
         "sps": sps,
         "profile": profile,
         "factors": {
@@ -170,12 +183,16 @@ def evaluate_security_decision(
         "decision_latency_ms": round(elapsed_ms, 4),
         "timestamp": time.time(),
     }
+    if verdict_meta is not None:
+        res["trust_verdict"] = verdict_meta
+
+    return res
 
 
 class SPSEngine:
     """
     Object-oriented wrapper for the Adaptive Security Decision Engine (Component 2).
-    Maintains cached configuration and local device trust state for fast edge processing.
+    Maintains cached configuration, SQLite trust client, and local device trust state.
     """
 
     def __init__(
@@ -183,6 +200,7 @@ class SPSEngine:
         config: Optional[Dict[str, Any]] = None,
         config_path: str = "config.json",
         trust_cache: Optional[Dict[str, float]] = None,
+        trust_client: Optional[TrustVerdictClient] = None,
     ):
         """
         Initializes the SPS Engine.
@@ -191,6 +209,7 @@ class SPSEngine:
             config (dict, optional): Pre-loaded configuration dictionary.
             config_path (str): Filepath to load config if not directly supplied.
             trust_cache (dict, optional): Reference to the in-memory Component 1 trust cache.
+            trust_client (TrustVerdictClient, optional): Connected SQLite client for Component 1 verdicts.
         """
         if config is not None:
             self.config = config
@@ -198,6 +217,23 @@ class SPSEngine:
             self.config = load_config(config_path)
 
         self.trust_cache = trust_cache if trust_cache is not None else {}
+
+        # Set up SQLite trust client if provided or configured
+        if trust_client is not None:
+            self.trust_client: Optional[TrustVerdictClient] = trust_client
+        else:
+            db_cfg = self.config.get("trust_database", {})
+            if db_cfg.get("enabled", False):
+                db_path = db_cfg.get("db_path", "trust.db")
+                fallback = self.config.get("default_dts_fallback", 0.70)
+                ttl = db_cfg.get("cache_ttl_seconds", 60.0)
+                self.trust_client = TrustVerdictClient(
+                    db_path=db_path,
+                    fallback_dts=fallback,
+                    cache_ttl_seconds=ttl,
+                )
+            else:
+                self.trust_client = None
 
     def update_trust(self, device_id: str, trust_score: float) -> None:
         """Asynchronously updates the trust score cache for a device (from Component 1)."""
@@ -220,7 +256,7 @@ class SPSEngine:
     ) -> Dict[str, Any]:
         """
         Evaluates an individual telemetry packet.
-        Uses internal trust_cache if trust_cache parameter is omitted.
+        Uses internal trust_cache / trust_client if trust_cache parameter is omitted.
         """
         active_cache = trust_cache if trust_cache is not None else self.trust_cache
         return evaluate_security_decision(
@@ -229,6 +265,7 @@ class SPSEngine:
             device_id=device_id,
             trust_cache=active_cache,
             config=self.config,
+            trust_client=self.trust_client,
         )
 
 
