@@ -30,6 +30,7 @@ class DecisionRecord:
     label: Optional[str]  # Normal, Borderline or Flagged; None when discarded
     score: Optional[int]
     rules: Tuple[str, ...]
+    case_id: object = None  # copied from the packet header for Component 4
     signature: str = ""
 
     def signed_bytes(self) -> bytes:

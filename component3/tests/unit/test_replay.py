@@ -203,12 +203,19 @@ def test_timestamp_regression_within_tolerance_accepted(engine, clock):
         PacketHeader(device_id=DEVICE, seq=SEQ_MAX + 1, timestamp=T0),
         PacketHeader(device_id="", seq=1, timestamp=T0),
         PacketHeader(device_id=None, seq=1, timestamp=T0),
+        PacketHeader(device_id=DEVICE, seq=1, timestamp=T0, case_id=""),
+        PacketHeader(device_id=DEVICE, seq=1, timestamp=T0, case_id=42),
     ],
 )
 def test_malformed_header_discarded(engine, header):
     v = engine.check(header)
     assert v.outcome is ReplayOutcome.DISCARD
     assert v.rule is Rule.MALFORMED_HEADER
+
+
+def test_case_id_is_optional_and_accepted_when_valid(engine):
+    assert engine.check(PacketHeader(DEVICE, 1, T0, "CASE001")).passed
+    assert engine.check(PacketHeader(DEVICE, 2, T0)).passed
 
 
 def test_max_sequence_value_accepted(engine):

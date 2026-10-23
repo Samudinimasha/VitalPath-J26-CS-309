@@ -52,6 +52,12 @@ def test_fake_jump_discarded_and_stream_continues(run):
     assert last_packet_delivered(text)
 
 
+def test_case_swap_is_discarded_then_original_delivered(run):
+    text = run("case_swap")
+    assert "case CASE002" in text and "R-DECRYPT-FAILED" in text
+    assert last_packet_delivered(text)
+
+
 def test_heart_rate_300_flagged_not_discarded(run):
     text = run("heart_rate_300")
     assert "HR 300 bpm → CRITICAL" in text

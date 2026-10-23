@@ -71,8 +71,11 @@ def pipeline(clock, decryptor, signer) -> Pipeline:
     )
 
 
+CASE = "CASE001"
+
+
 def packet(seq, vitals=NORMAL, ts=None):
-    return seal(PacketHeader(DEVICE, seq, T0 if ts is None else ts), vitals, KEY)
+    return seal(PacketHeader(DEVICE, seq, T0 if ts is None else ts, CASE), vitals, KEY)
 
 
 def stream(pipeline, clock, seqs, interval=1.0):
@@ -217,6 +220,23 @@ def test_every_record_is_signed_and_has_no_raw_vitals(pipeline, signer, clock):
         text = record.to_json()
         for raw in ("13.9", "72.3", "64.0", "spo2", "hr\""):
             assert raw not in text
+
+
+def test_records_carry_case_id_for_component4(pipeline, signer):
+    accepted = pipeline.process(packet(1)).record
+    discarded = pipeline.process(packet(1)).record  # replay
+    for record in (accepted, discarded):
+        assert record.case_id == "CASE001"
+        assert verify_record(record, signer.public_key)
+
+
+def test_relabelling_packet_with_another_case_is_discarded(pipeline):
+    """An attacker cannot file a patient's readings under another case."""
+    genuine = packet(1)
+    relabelled = EncryptedPacket(dataclasses.replace(genuine.header, case_id="CASE002"), genuine.payload)
+    r = pipeline.process(relabelled)
+    assert r.record.rules == ("R-DECRYPT-FAILED",)
+    assert outcome(pipeline.process(genuine)) == ("ACCEPT", "Normal")
 
 
 def test_end_to_end_latency_under_20ms(pipeline, clock):

@@ -20,6 +20,10 @@ class PacketHeader:
     device_id: object
     seq: object
     timestamp: object
+    # Emergency case the packet belongs to (e.g. CASE001), set by the
+    # ambulance from dispatch. Component 4 uses it to decide who may view the
+    # telemetry. Optional so packets without one are still checked.
+    case_id: object = None
 
 
 @dataclass(frozen=True)

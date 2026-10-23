@@ -29,7 +29,10 @@ from vitalpath_c3.models import EncryptedPacket, PacketHeader, VitalSigns
 from vitalpath_c3.output.decision_record import RecordSigner
 from vitalpath_c3.pipeline import Pipeline
 
-DEVICE = "amb-01"
+DEVICE = "MON-01"  # the ambulance's patient monitor
+CASE = "CASE001"  # emergency case from (simulated) dispatch
+UNIT = "AMB-07"
+REASON = "cardiac arrest"
 GREEN, YELLOW, RED, BOLD, DIM, RESET = "\033[32m", "\033[33m", "\033[31m", "\033[1m", "\033[2m", "\033[0m"
 
 WHY_DISCARDED = {
@@ -40,7 +43,7 @@ WHY_DISCARDED = {
     "R-TS-FUTURE": "timestamp is in the future (more than 2 s ahead)",
     "R-TS-REGRESSION": "timestamp goes backwards compared with newer packets",
     "R-MALFORMED-HEADER": "header is damaged or unreadable",
-    "R-DECRYPT-FAILED": "the seal is broken: the encrypted data was altered or forged",
+    "R-DECRYPT-FAILED": "the seal is broken: the packet was altered or forged",
     "R-PAYLOAD-MALFORMED": "decrypted data is not a valid vital-sign record",
 }
 
@@ -155,14 +158,14 @@ class Demo:
     def genuine(self, vitals: VitalSigns = None, gap: float = 1.0) -> EncryptedPacket:
         self.clock.now += gap
         self.seq += 1
-        packet = seal(PacketHeader(DEVICE, self.seq, self.clock.now), vitals or next(self.vitals), self.key)
+        packet = seal(PacketHeader(DEVICE, self.seq, self.clock.now, CASE), vitals or next(self.vitals), self.key)
         self.sent.append(packet)
         return packet
 
     def process(self, packet: EncryptedPacket, caption: str):
         result = self.pipeline.process(packet)
         h = packet.header
-        self.out(f"\n{BOLD}{caption}{RESET}  {DIM}(device {h.device_id}, seq {h.seq}){RESET}")
+        self.out(f"\n{BOLD}{caption}{RESET}  {DIM}(case {h.case_id}, device {h.device_id}, seq {h.seq}){RESET}")
         for line in describe(result):
             self.out(line)
         return result
@@ -203,9 +206,18 @@ class Demo:
         self.process(EncryptedPacket(packet.header, bytes(payload)), "ATTACKER sends an altered packet")
         self.process(packet, "The original, untouched packet arrives")
 
+    def case_swap(self):
+        self.warm_up()
+        packet = self.genuine()
+        swapped = EncryptedPacket(dataclasses.replace(packet.header, case_id="CASE002"), packet.payload)
+        self.out(f"{DIM}The attacker intercepts a packet for {CASE} and changes its case number to CASE002, "
+                 f"so this patient's readings would be filed under another patient's case.{RESET}")
+        self.process(swapped, "ATTACKER relabels a packet with another case number")
+        self.process(packet, "The original packet, still labelled " + CASE)
+
     def jump(self):
         self.warm_up()
-        header = PacketHeader(DEVICE, self.seq + 50_000, self.clock.now)
+        header = PacketHeader(DEVICE, self.seq + 50_000, self.clock.now, CASE)
         self.out(f"{DIM}The attacker invents a packet far ahead in the sequence, hoping to push the window "
                  f"forward and lock the ambulance out. Without the key, it cannot make a valid seal.{RESET}")
         self.process(EncryptedPacket(header, bytes(60)), "ATTACKER injects a fake far-ahead packet")
@@ -256,6 +268,7 @@ SCENARIOS = [
     ("3", "5G handover + replay attack", "handover"),
     ("4", "Tamper attack: alter the encrypted data", "tamper"),
     ("5", "Fake sequence jump (injection)", "jump"),
+    ("c", "Case swap: relabel a packet with another patient's case", "case_swap"),
     ("6", "Anomaly: impossible heart rate (300 bpm)", "heart_rate_300"),
     ("7", "Correlation: sensor fault (SpO2 13.9% with calm HR)", "sensor_fault"),
     ("8", "Correlation: hidden shock pattern", "shock"),
@@ -277,7 +290,9 @@ def main() -> None:
 
     demo = Demo(args.data, args.start)
     print(f"{BOLD}VitalPath Component 3: attack demonstration{RESET}")
-    print(f"{DIM}Ambulance {DEVICE} streams real vitals from {args.data}, encrypted.{RESET}")
+    print(f"{DIM}Dispatch (simulated): {CASE} · {REASON} · {UNIT} assigned.{RESET}")
+    print(f"{DIM}{UNIT}'s patient monitor {DEVICE} streams real vitals from {args.data}, "
+          f"encrypted and tagged {CASE}.{RESET}")
 
     if args.auto:
         for _, title, name in SCENARIOS:

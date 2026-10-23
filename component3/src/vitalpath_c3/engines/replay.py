@@ -256,6 +256,8 @@ def _malformed_reason(header: object) -> Optional[str]:
         return "seq must be an integer"
     if not 0 <= header.seq <= SEQ_MAX:
         return "seq outside unsigned 64-bit range"
+    if header.case_id is not None and (not isinstance(header.case_id, str) or not header.case_id):
+        return "case_id must be a non-empty string when present"
     ts = header.timestamp
     if not isinstance(ts, (int, float)) or isinstance(ts, bool):
         return "timestamp must be numeric"
