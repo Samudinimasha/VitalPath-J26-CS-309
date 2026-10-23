@@ -2,7 +2,9 @@
 from typing import Literal
 
 from pydantic import BaseModel, Field
+from datetime import datetime
 
+from typing import Literal
 
 class AccessRequest(BaseModel):
     case_id: str = Field(min_length=1)
@@ -41,3 +43,19 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     expires_in: int = 1800
+
+class TelemetryResponse(BaseModel):
+    id: int
+    case_id: str
+    device_id: str
+    sequence_number: int
+    heart_rate: int
+    spo2: float
+    systolic_bp: int
+    diastolic_bp: int
+    respiratory_rate: int
+    c3_status: Literal["ACCEPT", "FLAG"]
+    recorded_at: datetime
+
+    model_config = {"from_attributes": True}
+

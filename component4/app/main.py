@@ -14,6 +14,7 @@ from app.services.policy_engine import evaluate_policy
 
 from app.models import UserCredential
 from app.routes.auth import router as auth_router
+from app.routes.telemetry import router as telemetry_router
 from app.services.authentication import get_current_user
 
 
@@ -22,7 +23,7 @@ app = FastAPI(
     description="Context-Aware Emergency Access Control Prototype",
     version="0.1.0",
 )
-app.include_router(auth_router)
+
 
 def seed_database():
     """Create synthetic demonstration data once."""
@@ -182,3 +183,5 @@ def access_history(
         for log in logs
     ]
 
+app.include_router(auth_router)
+app.include_router(telemetry_router)

@@ -76,3 +76,25 @@ class UserCredential(Base):
     active: Mapped[bool] = mapped_column(
         Boolean, default=True, nullable=False
     )
+
+class TelemetryRecord(Base):
+    __tablename__ = "telemetry_records"
+
+    id: Mapped[int] = mapped_column(
+        Integer, primary_key=True, autoincrement=True
+    )
+    case_id: Mapped[str] = mapped_column(
+        ForeignKey("emergency_cases.id"), nullable=False
+    )
+    device_id: Mapped[str] = mapped_column(String, nullable=False)
+    sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    heart_rate: Mapped[int] = mapped_column(Integer, nullable=False)
+    spo2: Mapped[float] = mapped_column(Float, nullable=False)
+    systolic_bp: Mapped[int] = mapped_column(Integer, nullable=False)
+    diastolic_bp: Mapped[int] = mapped_column(Integer, nullable=False)
+    respiratory_rate: Mapped[int] = mapped_column(Integer, nullable=False)
+    c3_status: Mapped[str] = mapped_column(String, nullable=False)
+    recorded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utc_now
+    )
+
