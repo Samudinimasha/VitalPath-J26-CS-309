@@ -3,6 +3,7 @@
 Usage (from component3/):
     PYTHONPATH=src python3 -m simulator.attack_demo          # pick attacks from a menu
     PYTHONPATH=src python3 -m simulator.attack_demo --auto   # run every scenario in turn
+    PYTHONPATH=src python3 -m simulator.attack_demo --quick  # five-minute presentation set
 
 An ambulance streams real PhysioNet vitals (bidmc53n), encrypted. You choose
 an attack or a sensor fault, and every packet involved is walked through the
@@ -14,6 +15,7 @@ flood happens instantly.
 
 import argparse
 import dataclasses
+import logging
 import json
 import re
 import time
@@ -275,6 +277,16 @@ SCENARIOS = [
 ]
 
 
+# Five-minute presentation set: one scenario per stage, plus the 5G handover.
+QUICK = [
+    ("Replay Engine: an attacker resends a captured packet", "replay"),
+    ("Replay Engine: 5G handover replay, then the real next packet", "handover"),
+    ("Decryption: an attacker alters the encrypted data", "tamper"),
+    ("Threshold Engine: impossible heart rate (300 bpm)", "heart_rate_300"),
+    ("Correlation + Decision: slipped oximeter probe (real MIMIC-III case)", "sensor_fault"),
+]
+
+
 def strip_colour(text: str) -> str:
     return re.sub(r"\033\[[0-9;]*m", "", text)
 
@@ -284,19 +296,24 @@ def main() -> None:
     parser.add_argument("--data", default="datasets/bidmc_53n.csv")
     parser.add_argument("--start", type=int, default=60, help="row of the recording to start from")
     parser.add_argument("--auto", action="store_true", help="run every scenario in turn")
+    parser.add_argument("--quick", action="store_true", help="five-scenario presentation set")
     args = parser.parse_args()
 
+    # The walk-through already shows every discard; keep engine log lines off screen.
+    logging.getLogger("vitalpath_c3").setLevel(logging.ERROR)
     demo = Demo(args.data, args.start)
     print(f"{BOLD}VitalPath Component 3: attack demonstration{RESET}")
     print(f"{DIM}Dispatch (simulated): {CASE} · {UNIT} assigned.{RESET}")
     print(f"{DIM}{UNIT}'s patient monitor {DEVICE} streams real vitals from {args.data}, "
           f"encrypted and tagged {CASE}.{RESET}")
 
-    if args.auto:
-        for _, title, name in SCENARIOS:
+    if args.auto or args.quick:
+        chosen = QUICK if args.quick else [(title, name) for _, title, name in SCENARIOS]
+        for n, (title, name) in enumerate(chosen, 1):
+            input(f"\n{DIM}Press Enter for scenario {n} of {len(chosen)}...{RESET}")
             print(f"\n{BOLD}{'=' * 20} {title} {'=' * 20}{RESET}")
             getattr(demo, name)()
-            input(f"\n{DIM}Press Enter for the next scenario...{RESET}")
+        print(f"\n{BOLD}Done.{RESET}")
         return
 
     menu = "\n".join(f"  {key}  {title}" for key, title, _ in SCENARIOS)

@@ -70,7 +70,7 @@ One window, menu-driven: choose an attack or sensor fault and watch each engine 
 PYTHONPATH=src python3 -m simulator.attack_demo
 ```
 
-Add `--auto` to run every scenario in turn (press Enter between them).
+Add `--auto` to run every scenario in turn, or `--quick` for the five-scenario presentation set (press Enter between them).
 
 ## Try one engine on its own
 
