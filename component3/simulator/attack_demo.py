@@ -27,7 +27,6 @@ from vitalpath_c3.engines.rate_limiter import RateLimiter
 from vitalpath_c3.engines.replay import ReplayDetectionEngine, ReplayOutcome
 from vitalpath_c3.engines.threshold import Band
 from vitalpath_c3.models import EncryptedPacket, PacketHeader, VitalSigns
-from vitalpath_c3.output.decision_record import RecordSigner
 from vitalpath_c3.pipeline import Pipeline
 
 DEVICE = "MON-01"  # the ambulance's patient monitor
@@ -78,7 +77,7 @@ def describe(result) -> list:
     """Plain-language walk through each stage of one packet's processing."""
     lines = []
     step = lambda n, name, text: lines.append(f"  {n} {name:<20} {text}")
-    rec = result.record
+    rec = result.summary
 
     if not result.rate_limit.allowed:
         step("1", "Flood check", f"{RED}✗ BLOCKED{RESET}  {WHY_DISCARDED['R-RATE-LIMIT']}")
@@ -125,7 +124,7 @@ def describe(result) -> list:
                  f"{colour}{f.kind.value.upper()}{RESET}  {f.detail}  [{f.rule}]")
 
     if rec.decision == "DISCARD":
-        verdict = f"{RED}{BOLD}DISCARD{RESET}  packet dropped, alert logged for Component 4"
+        verdict = f"{RED}{BOLD}DISCARD{RESET}  packet dropped, alert logged"
     elif rec.decision == "ACCEPT":
         verdict = f"{GREEN}{BOLD}ACCEPT 'Normal'{RESET}  delivered to the hospital"
     else:
@@ -133,7 +132,7 @@ def describe(result) -> list:
         verdict = (f"{colour}{BOLD}FLAG '{rec.label}'{RESET} (score {rec.score})  "
                    f"delivered with a warning for the clinician to review")
     step("→", "Decision", verdict)
-    lines.append(f"  {DIM}  {result.latency_ms:.2f} ms · record signed for Component 4{RESET}")
+    lines.append(f"  {DIM}  {result.latency_ms:.2f} ms{RESET}")
     return lines
 
 
@@ -143,7 +142,6 @@ class Demo:
         self.clock = DemoClock()
         self.pipeline = Pipeline(
             PayloadDecryptor(demo_key),
-            RecordSigner.generate(),
             rate_limiter=RateLimiter(clock=self.clock),
             replay=ReplayDetectionEngine(clock=self.clock),
             clock=self.clock,
@@ -245,7 +243,7 @@ class Demo:
         results = []
         for _ in range(50):
             results.append(self.pipeline.process(self.genuine(gap=0.02)))
-        blocked = sum(r.record.rules == ("R-RATE-LIMIT",) for r in results)
+        blocked = sum(r.summary.rules == ("R-RATE-LIMIT",) for r in results)
         self.out(f"\n{BOLD}FLOOD: 50 packets in 1 second{RESET}")
         self.out(f"  1 Flood check         {GREEN}{50 - blocked} let through{RESET}, "
                  f"{RED}{blocked} BLOCKED{RESET}  (limit: 20 per second per device)")
@@ -256,7 +254,7 @@ class Demo:
         self.out(f"\n{BOLD}Ten normal packets{RESET}")
         for _ in range(10):
             result = self.pipeline.process(self.genuine())
-            rec = result.record
+            rec = result.summary
             colour = GREEN if rec.decision == "ACCEPT" else YELLOW
             self.out(f"  {rec.packet_id:<11} {show_vitals(result.vitals):<44} "
                      f"{colour}{rec.decision} '{rec.label}'{RESET}")

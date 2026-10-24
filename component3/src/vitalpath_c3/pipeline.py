@@ -6,7 +6,7 @@
        ... replay window committed only now, after authentication
     4. Threshold + Correlation on decrypted vitals
     5. Hybrid Decision         -> ACCEPT 'Normal' or FLAG 'Borderline'/'Flagged'
-    6. Signed decision record  -> sink for Component 4 (no raw vitals)
+    6. Summary of the decision (case, device, packet ID, label, score, rules)
 
 Discards happen only for factual findings (flood, replay, malformed header,
 unauthentic payload), never because of what the vital signs say.
@@ -14,7 +14,7 @@ unauthentic payload), never because of what the vital signs say.
 
 import time
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Callable, Optional, Tuple
 
 from vitalpath_c3.crypto.payload import PayloadDecryptor, PayloadError
 from vitalpath_c3.engines.correlation import CorrelationEngine, CorrelationResult
@@ -23,13 +23,25 @@ from vitalpath_c3.engines.rate_limiter import RateLimiter, RateLimitVerdict
 from vitalpath_c3.engines.replay import ReplayDetectionEngine, ReplayOutcome, ReplayVerdict
 from vitalpath_c3.engines.threshold import ThresholdEngine, ThresholdResult
 from vitalpath_c3.models import EncryptedPacket, VitalSigns
-from vitalpath_c3.output.decision_record import DecisionRecord, MemorySink, RecordSigner
 from vitalpath_c3.rules import Rule
 
 
 @dataclass(frozen=True)
+class Summary:
+    """The outcome for one packet: which packet, what was decided and why."""
+
+    device_id: object
+    packet_id: object
+    case_id: object
+    decision: str  # ACCEPT, FLAG or DISCARD
+    label: Optional[str]  # Normal, Borderline or Flagged; None when discarded
+    score: Optional[int]
+    rules: Tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class PipelineResult:
-    record: DecisionRecord
+    summary: Summary
     decision: Optional[Decision]  # None when the packet was discarded
     detail: str
     latency_ms: float
@@ -45,15 +57,13 @@ class PipelineResult:
     def explain(self) -> str:
         if self.decision is not None:
             return self.decision.explain()
-        return f"DISCARD ({self.record.rules[0]}): {self.detail}"
+        return f"DISCARD ({self.summary.rules[0]}): {self.detail}"
 
 
 class Pipeline:
     def __init__(
         self,
         decryptor: PayloadDecryptor,
-        signer: RecordSigner,
-        sink=None,
         rate_limiter: Optional[RateLimiter] = None,
         replay: Optional[ReplayDetectionEngine] = None,
         threshold: Optional[ThresholdEngine] = None,
@@ -62,14 +72,11 @@ class Pipeline:
         clock: Callable[[], float] = time.time,
     ) -> None:
         self.decryptor = decryptor
-        self.signer = signer
-        self.sink = sink if sink is not None else MemorySink()
         self.rate_limiter = rate_limiter or RateLimiter()
         self.replay = replay or ReplayDetectionEngine(clock=clock)
         self.threshold = threshold or ThresholdEngine()
         self.correlation = correlation or CorrelationEngine()
         self.hybrid = hybrid or HybridDecisionEngine()
-        self._clock = clock
 
     def process(self, packet: EncryptedPacket) -> PipelineResult:
         start = time.perf_counter()
@@ -105,29 +112,20 @@ class Pipeline:
 
     def _finish(self, start, packet, decision, discard_rule, detail, decrypted, stages) -> PipelineResult:
         header = packet.header
+        device_id = getattr(header, "device_id", None)
+        packet_id = getattr(header, "packet_id", None)
+        case_id = getattr(header, "case_id", None)
         if decision is None:
-            record = DecisionRecord(
-                device_id=getattr(header, "device_id", None),
-                case_id=getattr(header, "case_id", None),
-                packet_id=getattr(header, "packet_id", None),
-                received_at=self._clock(),
-                decision="DISCARD",
-                label=None,
-                score=None,
-                rules=(discard_rule.value,),
-            )
+            summary = Summary(device_id, packet_id, case_id, "DISCARD", None, None, (discard_rule.value,))
         else:
-            record = DecisionRecord(
-                device_id=header.device_id,
-                case_id=header.case_id,
-                packet_id=header.packet_id,
-                received_at=self._clock(),
-                decision=decision.outcome.value,
-                label=decision.label,
-                score=decision.score,
-                rules=tuple(c.rule for c in decision.contributions),
+            summary = Summary(
+                device_id,
+                packet_id,
+                case_id,
+                decision.outcome.value,
+                decision.label,
+                decision.score,
+                tuple(c.rule for c in decision.contributions),
             )
-        record = self.signer.sign(record)
-        self.sink.append(record)
         latency_ms = (time.perf_counter() - start) * 1000
-        return PipelineResult(record, decision, detail, latency_ms, decrypted, **stages)
+        return PipelineResult(summary, decision, detail, latency_ms, decrypted, **stages)

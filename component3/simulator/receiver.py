@@ -1,7 +1,7 @@
 """Live receiver: runs every incoming UDP packet through the full Component 3 pipeline.
 
 Usage (from component3/):
-    PYTHONPATH=src python3 -m simulator.receiver [--port 5005] [--explain] [--records decisions.jsonl]
+    PYTHONPATH=src python3 -m simulator.receiver [--port 5005] [--explain]
 
 Each packet goes through rate limiting, replay detection, decryption,
 threshold and correlation checks and the hybrid decision. One line is printed
@@ -17,7 +17,6 @@ from collections import Counter
 from simulator.demo_keys import demo_key
 from simulator.wire import DEFAULT_HOST, DEFAULT_PORT, decode
 from vitalpath_c3.crypto.payload import PayloadDecryptor
-from vitalpath_c3.output.decision_record import JsonlSink, MemorySink, RecordSigner
 from vitalpath_c3.pipeline import Pipeline
 
 COLOURS = {"ACCEPT": "\033[32m", "FLAG": "\033[33m", "DISCARD": "\033[31m"}
@@ -30,7 +29,6 @@ def main() -> None:
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--explain", action="store_true", help="print the scoring behind each FLAG")
-    parser.add_argument("--records", help="also append signed decision records to this JSONL file")
     args = parser.parse_args()
 
     # The verdict lines below already show every discard; keep engine logs quiet.
@@ -38,8 +36,6 @@ def main() -> None:
 
     pipeline = Pipeline(
         PayloadDecryptor(demo_key),
-        RecordSigner.generate(),
-        sink=JsonlSink(args.records) if args.records else MemorySink(),
     )
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
@@ -62,7 +58,7 @@ def main() -> None:
         while True:
             datagram, _ = sock.recvfrom(65535)
             result = pipeline.process(decode(datagram))
-            rec = result.record
+            rec = result.summary
             latencies.append(result.latency_ms)
             decisions[(rec.decision, rec.label)] += 1
             rules.update(rec.rules)

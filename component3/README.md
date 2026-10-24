@@ -27,7 +27,6 @@ No machine learning: every verdict cites a named rule in `src/vitalpath_c3/rules
 | `src/vitalpath_c3/rules.py` | Named rule IDs and descriptions |
 | `src/vitalpath_c3/engines/` | `replay.py` (T9), threshold (T10), correlation (T11), hybrid (T12) |
 | `src/vitalpath_c3/crypto/` | Payload decryption, sensitivity-label signing |
-| `src/vitalpath_c3/output/` | Decision records for Component 4 |
 | `src/vitalpath_c3/data/` | Clinical thresholds (D2), correlation rules (D3), PhysioNet loader |
 | `simulator/` | Synthetic stream and attack generation (replay, handover, injection, flooding) |
 | `tests/unit/` | Per-engine unit tests |
