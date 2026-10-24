@@ -4,17 +4,19 @@ import re
 from dataclasses import dataclass
 from typing import Optional
 
-# Sequence numbers are unsigned 64-bit counters; wraparound is not handled.
-SEQ_MAX = 2**64 - 1
-
-# Component 2's packet_id: letters, '_' or '-', then the counter, e.g.
-# mimic_00042, pkt_001, PKT-00001. Anything else (such as Component 2's random
-# fallback pkt_9f3a71c2be04) has no usable order and is rejected.
+# Packet IDs follow Component 2's format: letters, '_' or '-', then a counter
+# that rises per device, e.g. PKT-000042, mimic_00042, pkt_001. Anything else
+# (such as Component 2's random fallback pkt_9f3a71c2be04) has no usable order
+# and is rejected by the Replay Detection Engine.
 PACKET_ID_PATTERN = re.compile(r"[A-Za-z]+[_-]([0-9]+)")
+
+# Largest counter accepted in a packet ID (unsigned 64-bit); wraparound is not handled.
+PACKET_NUMBER_MAX = 2**64 - 1
 
 
 def packet_id_number(packet_id: object) -> Optional[int]:
-    """The counter inside a packet_id, or None if it does not match the pattern."""
+    """The counter inside a packet ID (PKT-000042 -> 42), or None if the ID
+    does not follow the agreed format."""
     if isinstance(packet_id, str):
         match = PACKET_ID_PATTERN.fullmatch(packet_id)
         if match:
@@ -33,22 +35,18 @@ class PacketHeader:
     """
 
     device_id: object
-    seq: object
+    # Component 2's packet identifier; its counter drives replay detection.
+    packet_id: object
     timestamp: object
     # Emergency case the packet belongs to (e.g. CASE001), set by the
     # ambulance from dispatch. Component 4 uses it to decide who may view the
     # telemetry. Optional so packets without one are still checked.
     case_id: object = None
-    # Component 2's packet identifier. When a packet has a packet_id but no
-    # seq, the sequence number is read from it (mimic_00042 -> 42), so the
-    # replay window works on Component 2's own numbering.
-    packet_id: object = None
 
-    def __post_init__(self) -> None:
-        if self.seq is None and self.packet_id is not None:
-            number = packet_id_number(self.packet_id)
-            if number is not None:
-                object.__setattr__(self, "seq", number)
+    @property
+    def number(self) -> Optional[int]:
+        """The packet's counter, read from packet_id; None if the ID is unusable."""
+        return packet_id_number(self.packet_id)
 
 
 @dataclass(frozen=True)

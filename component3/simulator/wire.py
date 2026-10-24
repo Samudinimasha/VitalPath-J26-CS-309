@@ -13,12 +13,16 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 5005
 
 
-def encode(device_id, seq, timestamp, payload: bytes, case_id=None, packet_id=None) -> bytes:
-    fields = {"case_id": case_id, "device_id": device_id, "seq": seq, "timestamp": timestamp}
-    if packet_id is not None:
-        fields["packet_id"] = packet_id
-    fields["payload"] = payload.hex()
-    return json.dumps(fields).encode()
+def packet_id(count: int) -> str:
+    """Packet ID in Component 2's format for the simulator's counter: 42 -> PKT-000042."""
+    return f"PKT-{count:06d}"
+
+
+def encode(device_id, packet_id, timestamp, payload: bytes, case_id=None) -> bytes:
+    return json.dumps(
+        {"case_id": case_id, "device_id": device_id, "packet_id": packet_id, "timestamp": timestamp,
+         "payload": payload.hex()}
+    ).encode()
 
 
 def decode(datagram: bytes) -> EncryptedPacket:
@@ -36,7 +40,6 @@ def decode(datagram: bytes) -> EncryptedPacket:
         payload = b""
     header = PacketHeader(
         device_id=obj.get("device_id"),
-        seq=obj.get("seq"),
         timestamp=obj.get("timestamp"),
         case_id=obj.get("case_id"),
         packet_id=obj.get("packet_id"),

@@ -90,13 +90,13 @@ class Pipeline:
         except PayloadError as err:
             return self._finish(start, packet, None, err.rule, err.detail, True, stages)
 
-        # Authentic: only now does the packet use up its sequence number.
+        # Authentic: only now does the packet use up its packet ID.
         if not self.replay.commit(header):
             return self._finish(
                 start, packet, None, Rule.REPLAY_DUPLICATE, "identical packet already processed", True, stages
             )
         if replay.outcome is ReplayOutcome.ACCEPT_FLAGGED:
-            self.replay.confirm_jump(header.device_id, header.seq)
+            self.replay.confirm_jump(header.device_id, header.number)
 
         threshold = stages["threshold"] = self.threshold.evaluate(vitals)
         correlation = stages["correlation"] = self.correlation.evaluate(vitals)
@@ -110,7 +110,6 @@ class Pipeline:
                 device_id=getattr(header, "device_id", None),
                 case_id=getattr(header, "case_id", None),
                 packet_id=getattr(header, "packet_id", None),
-                seq=getattr(header, "seq", None),
                 received_at=self._clock(),
                 decision="DISCARD",
                 label=None,
@@ -122,7 +121,6 @@ class Pipeline:
                 device_id=header.device_id,
                 case_id=header.case_id,
                 packet_id=header.packet_id,
-                seq=header.seq,
                 received_at=self._clock(),
                 decision=decision.outcome.value,
                 label=decision.label,

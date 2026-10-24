@@ -20,6 +20,7 @@ import time
 
 from simulator.demo_keys import demo_key
 from simulator.sender import endless_vitals
+from simulator.wire import packet_id
 from vitalpath_c3.crypto.payload import PayloadDecryptor, seal
 from vitalpath_c3.engines.correlation import Kind
 from vitalpath_c3.engines.rate_limiter import RateLimiter
@@ -36,8 +37,8 @@ GREEN, YELLOW, RED, BOLD, DIM, RESET = "\033[32m", "\033[33m", "\033[31m", "\033
 
 WHY_DISCARDED = {
     "R-RATE-LIMIT": "too many packets per second from this device (flood)",
-    "R-REPLAY-DUPLICATE": "this sequence number was already received, so this is a copy (replay)",
-    "R-REPLAY-OUTSIDE-WINDOW": "sequence number is far older than anything still accepted",
+    "R-REPLAY-DUPLICATE": "this packet ID was already received, so this is a copy (replay)",
+    "R-REPLAY-OUTSIDE-WINDOW": "packet ID is far older than anything still accepted",
     "R-TS-STALE": "timestamp is too old (more than 30 s)",
     "R-TS-FUTURE": "timestamp is in the future (more than 2 s ahead)",
     "R-TS-REGRESSION": "timestamp goes backwards compared with newer packets",
@@ -87,7 +88,7 @@ def describe(result) -> list:
     r = result.replay
     if r is not None:
         if r.outcome is ReplayOutcome.ACCEPT:
-            step("2", "Replay Engine", f"{GREEN}✓ fresh{RESET}  new sequence number, timestamp OK")
+            step("2", "Replay Engine", f"{GREEN}✓ fresh{RESET}  new packet ID, timestamp OK")
         elif r.outcome is ReplayOutcome.ACCEPT_FLAGGED:
             step("2", "Replay Engine", f"{YELLOW}⚠ suspicious jump{RESET}  {r.detail}; passed on to check if genuine")
         else:
@@ -149,22 +150,22 @@ class Demo:
         )
         self.vitals = endless_vitals(data_path, start)
         self.key = demo_key(DEVICE)
-        self.seq = 0
+        self.count = 0  # genuine packets so far; packet IDs are built from it
         self.sent = []  # every genuine packet, as an eavesdropper would capture it
 
     # --- sending ------------------------------------------------------------
 
     def genuine(self, vitals: VitalSigns = None, gap: float = 1.0) -> EncryptedPacket:
         self.clock.now += gap
-        self.seq += 1
-        packet = seal(PacketHeader(DEVICE, self.seq, self.clock.now, CASE), vitals or next(self.vitals), self.key)
+        self.count += 1
+        packet = seal(PacketHeader(DEVICE, packet_id(self.count), self.clock.now, CASE), vitals or next(self.vitals), self.key)
         self.sent.append(packet)
         return packet
 
     def process(self, packet: EncryptedPacket, caption: str):
         result = self.pipeline.process(packet)
         h = packet.header
-        self.out(f"\n{BOLD}{caption}{RESET}  {DIM}(case {h.case_id}, device {h.device_id}, seq {h.seq}){RESET}")
+        self.out(f"\n{BOLD}{caption}{RESET}  {DIM}(case {h.case_id}, device {h.device_id}, {h.packet_id}){RESET}")
         for line in describe(result):
             self.out(line)
         return result
@@ -181,7 +182,7 @@ class Demo:
     def replay(self):
         self.warm_up()
         captured = self.sent[-2]
-        self.out(f"{DIM}The attacker recorded packet seq {captured.header.seq} earlier and now sends an exact copy.{RESET}")
+        self.out(f"{DIM}The attacker recorded packet {captured.header.packet_id} earlier and now sends an exact copy.{RESET}")
         self.process(captured, "ATTACKER resends a captured packet")
 
     def handover(self):
@@ -190,7 +191,7 @@ class Demo:
         self.out(f"\n{YELLOW}~~~ 5G handover: the link drops for 3 seconds while the ambulance changes cell tower ~~~{RESET}")
         self.clock.now += 3
         forged = EncryptedPacket(dataclasses.replace(captured.header, timestamp=self.clock.now), captured.payload)
-        self.out(f"{DIM}During reconnection the attacker resends packet seq {captured.header.seq}, "
+        self.out(f"{DIM}During reconnection the attacker resends packet {captured.header.packet_id}, "
                  f"with its timestamp changed to look fresh.{RESET}")
         self.process(forged, "ATTACKER replays an old packet during the handover")
         self.process(self.genuine(gap=0.2), "Ambulance reconnects and sends its real next packet")
@@ -216,8 +217,8 @@ class Demo:
 
     def jump(self):
         self.warm_up()
-        header = PacketHeader(DEVICE, self.seq + 50_000, self.clock.now, CASE)
-        self.out(f"{DIM}The attacker invents a packet far ahead in the sequence, hoping to push the window "
+        header = PacketHeader(DEVICE, packet_id(self.count + 50_000), self.clock.now, CASE)
+        self.out(f"{DIM}The attacker invents a packet ID far ahead of the real ones, hoping to push the window "
                  f"forward and lock the ambulance out. Without the key, it cannot make a valid seal.{RESET}")
         self.process(EncryptedPacket(header, bytes(60)), "ATTACKER injects a fake far-ahead packet")
         self.process(self.genuine(), "Ambulance's next real packet")
@@ -257,7 +258,7 @@ class Demo:
             result = self.pipeline.process(self.genuine())
             rec = result.record
             colour = GREEN if rec.decision == "ACCEPT" else YELLOW
-            self.out(f"  seq {rec.seq:<4} {show_vitals(result.vitals):<44} "
+            self.out(f"  {rec.packet_id:<11} {show_vitals(result.vitals):<44} "
                      f"{colour}{rec.decision} '{rec.label}'{RESET}")
 
 
@@ -266,7 +267,7 @@ SCENARIOS = [
     ("2", "Replay attack: resend a captured packet", "replay"),
     ("3", "5G handover + replay attack", "handover"),
     ("4", "Tamper attack: alter the encrypted data", "tamper"),
-    ("5", "Fake sequence jump (injection)", "jump"),
+    ("5", "Fake packet ID jump (injection)", "jump"),
     ("c", "Case swap: relabel a packet with another patient's case", "case_swap"),
     ("6", "Anomaly: impossible heart rate (300 bpm)", "heart_rate_300"),
     ("7", "Correlation: sensor fault (SpO2 13.9% with calm HR)", "sensor_fault"),

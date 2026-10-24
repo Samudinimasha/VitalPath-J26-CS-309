@@ -12,10 +12,10 @@ sealed with the AES-GCM stand-in for Component 2. With --attacks, after every
 
     replay     attacker resends a captured packet                      (S2)
     handover   link drops 3 s; attacker resends a captured packet with
-               a refreshed timestamp; stream resumes with the next seq  (S3, S4)
+               a refreshed timestamp; stream resumes with the next packet (S3, S4)
     reorder    network delivers two packets in swapped order           (legitimate)
     spike      sensor reports heart rate 300 bpm                       (S5)
-    jump       attacker injects a far-ahead sequence number            (S10)
+    jump       attacker injects a far-ahead packet ID                  (S10)
     probe-off  oximeter probe slips: SpO2 13.9% with a normal HR       (S6)
     tamper     attacker flips bits in a packet's encrypted payload
     stale      attacker sends a packet stamped 60 s ago
@@ -33,7 +33,7 @@ import socket
 import time
 
 from simulator.demo_keys import demo_key
-from simulator.wire import DEFAULT_HOST, DEFAULT_PORT, encode
+from simulator.wire import DEFAULT_HOST, DEFAULT_PORT, encode, packet_id
 from vitalpath_c3.crypto.payload import seal
 from vitalpath_c3.data.loaders import load_vitals_csv
 from vitalpath_c3.models import PacketHeader, VitalSigns
@@ -51,21 +51,21 @@ class Ambulance:
         self.key = demo_key(device_id)
         self.interval = interval
         self.vitals = vitals  # endless iterator of VitalSigns
-        self.seq = 0
+        self.count = 0  # how many genuine packets so far; packet IDs are built from it
         self.captured = []  # datagrams an eavesdropper on the link has recorded
 
-    def _datagram(self, seq, vitals, ts=None):
-        header = PacketHeader(self.device_id, seq, time.time() if ts is None else ts, self.case_id)
+    def _datagram(self, count, vitals, ts=None):
+        header = PacketHeader(self.device_id, packet_id(count), time.time() if ts is None else ts, self.case_id)
         packet = seal(header, vitals, self.key)
-        return encode(header.device_id, header.seq, header.timestamp, packet.payload, self.case_id)
+        return encode(header.device_id, header.packet_id, header.timestamp, packet.payload, self.case_id)
 
     def _send(self, datagram):
         self.sock.sendto(datagram, self.addr)
 
     def _next(self, vitals=None):
         """Send the next genuine packet (optionally with chosen vitals)."""
-        self.seq += 1
-        datagram = self._datagram(self.seq, vitals or next(self.vitals))
+        self.count += 1
+        datagram = self._datagram(self.count, vitals or next(self.vitals))
         self.captured.append(datagram)
         self._send(datagram)
 
@@ -76,49 +76,49 @@ class Ambulance:
     def event(self, name):
         say = lambda text: print(f"  >> {text}")
         if name == "replay":
-            say(f"ATTACK replay: resending captured seq {self.seq - 2}")
+            say(f"ATTACK replay: resending captured {packet_id(self.count - 2)}")
             self._send(self.captured[-3])
         elif name == "handover":
             say("HANDOVER: link down for 3 s ...")
             time.sleep(3)
             old = json.loads(self.captured[-2])
-            say(f"ATTACK post-handover replay of seq {old['seq']} with refreshed timestamp")
-            self._send(encode(old["device_id"], old["seq"], time.time(), bytes.fromhex(old["payload"]), old["case_id"]))
-            say(f"stream resumes with seq {self.seq + 1}")
+            say(f"ATTACK post-handover replay of {old['packet_id']} with refreshed timestamp")
+            self._send(encode(old["device_id"], old["packet_id"], time.time(), bytes.fromhex(old["payload"]), old["case_id"]))
+            say(f"stream resumes with {packet_id(self.count + 1)}")
         elif name == "reorder":
-            a, b = self.seq + 1, self.seq + 2
+            a, b = self.count + 1, self.count + 2
             da, db = self._datagram(a, next(self.vitals)), self._datagram(b, next(self.vitals))
-            self.seq = b
+            self.count = b
             self.captured += [da, db]
-            say(f"network reorders: {b} arrives before {a}")
+            say(f"network reorders: {packet_id(b)} arrives before {packet_id(a)}")
             self._send(db)
             self._send(da)
         elif name == "spike":
             say("SENSOR heart rate 300 bpm")
             self._next(dataclasses.replace(next(self.vitals), hr=300.0, pulse=300.0))
         elif name == "jump":
-            seq = self.seq + 50_000
-            say(f"ATTACK injected seq {seq} with forged payload")
-            self._send(encode(self.device_id, seq, time.time(), os.urandom(60), self.case_id))
+            forged_id = packet_id(self.count + 50_000)
+            say(f"ATTACK injected {forged_id} with forged payload")
+            self._send(encode(self.device_id, forged_id, time.time(), os.urandom(60), self.case_id))
         elif name == "probe-off":
             say("SENSOR oximeter probe slipped: SpO2 13.9% with normal HR")
             self._next(VitalSigns(hr=64.0, pulse=72.3, spo2=13.9))
         elif name == "tamper":
-            datagram = self._datagram(self.seq + 1, next(self.vitals))
+            datagram = self._datagram(self.count + 1, next(self.vitals))
             obj = json.loads(datagram)
             payload = bytearray(bytes.fromhex(obj["payload"]))
             payload[-1] ^= 0xFF
-            say(f"ATTACK tampered payload for seq {self.seq + 1}")
-            self._send(encode(obj["device_id"], obj["seq"], obj["timestamp"], bytes(payload), obj["case_id"]))
+            say(f"ATTACK tampered payload for {obj['packet_id']}")
+            self._send(encode(obj["device_id"], obj["packet_id"], obj["timestamp"], bytes(payload), obj["case_id"]))
         elif name == "stale":
             say("ATTACK packet stamped 60 s ago")
-            self._send(encode(self.device_id, self.seq + 1, time.time() - 60, os.urandom(60), self.case_id))
+            self._send(encode(self.device_id, packet_id(self.count + 1), time.time() - 60, os.urandom(60), self.case_id))
         elif name == "future":
             say("ATTACK packet stamped 10 s in the future")
-            self._send(encode(self.device_id, self.seq + 1, time.time() + 10, os.urandom(60), self.case_id))
+            self._send(encode(self.device_id, packet_id(self.count + 1), time.time() + 10, os.urandom(60), self.case_id))
         elif name == "malformed":
             say("CORRUPT packet with timestamp field 'corrupted'")
-            self._send(encode(self.device_id, self.seq + 1, "corrupted", os.urandom(60), self.case_id))
+            self._send(encode(self.device_id, packet_id(self.count + 1), "corrupted", os.urandom(60), self.case_id))
         elif name == "flood":
             say("FLOOD 50 packets in one second")
             for _ in range(50):
@@ -167,7 +167,7 @@ def main() -> None:
         pass
     finally:
         sock.close()
-    print(f"Sent {amb.seq} genuine packets.")
+    print(f"Sent {amb.count} genuine packets.")
 
 
 if __name__ == "__main__":

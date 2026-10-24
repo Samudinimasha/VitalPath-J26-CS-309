@@ -13,8 +13,8 @@ from vitalpath_c3.engines.threshold import ThresholdEngine
 from vitalpath_c3.models import VitalSigns
 from vitalpath_c3.rules import Rule
 
-FRESH = ReplayVerdict(ReplayOutcome.ACCEPT, Rule.REPLAY_ACCEPT, "amb-01", 1)
-JUMP = ReplayVerdict(ReplayOutcome.ACCEPT_FLAGGED, Rule.SEQ_JUMP, "amb-01", 9000, "jump of 8999")
+FRESH = ReplayVerdict(ReplayOutcome.ACCEPT, Rule.REPLAY_ACCEPT, "amb-01", "PKT-000001")
+JUMP = ReplayVerdict(ReplayOutcome.ACCEPT_FLAGGED, Rule.PACKET_JUMP, "amb-01", "PKT-009000", "jump of 8999")
 NORMAL = dict(hr=75, pulse=74, spo2=98, sbp=120, dbp=78, resp=14)
 
 threshold = ThresholdEngine()
@@ -76,11 +76,11 @@ def test_borderline_bp_with_high_shock_index_is_flagged(hybrid):
     assert (d.label, d.score) == ("Flagged", 3)
 
 
-def test_s10_sequence_jump_is_flagged_even_with_normal_vitals(hybrid):
-    """S10: sequence number jump -> flag, possible injection."""
+def test_s10_packet_id_jump_is_flagged_even_with_normal_vitals(hybrid):
+    """S10: packet ID jump -> flag, possible injection."""
     d = decide(hybrid, replay=JUMP, **NORMAL)
     assert (d.outcome, d.label, d.score) == (Outcome.FLAG, "Flagged", 3)
-    assert d.contributions[0].rule == "R-SEQ-JUMP"
+    assert d.contributions[0].rule == "R-PACKET-JUMP"
 
 
 def test_invalid_reading_is_flagged(hybrid):
@@ -95,7 +95,7 @@ def test_missing_readings_score_nothing(hybrid):
 
 
 def test_discarded_packet_rejected(hybrid):
-    discarded = ReplayVerdict(ReplayOutcome.DISCARD, Rule.REPLAY_DUPLICATE, "amb-01", 1)
+    discarded = ReplayVerdict(ReplayOutcome.DISCARD, Rule.REPLAY_DUPLICATE, "amb-01", "PKT-000001")
     v = VitalSigns(**NORMAL)
     with pytest.raises(ValueError, match="must not reach"):
         hybrid.decide(discarded, threshold.evaluate(v), correlation.evaluate(v))
@@ -120,7 +120,7 @@ def test_custom_scoring():
         {
             "points": {
                 "threshold_borderline": 5, "threshold_critical": 5, "threshold_invalid": 5,
-                "correlation_concerning": 5, "correlation_inconsistent": 5, "replay_sequence_jump": 5,
+                "correlation_concerning": 5, "correlation_inconsistent": 5, "replay_packet_jump": 5,
             },
             "labels": [{"label": "Normal", "max_score": 0}, {"label": "Flagged"}],
         }

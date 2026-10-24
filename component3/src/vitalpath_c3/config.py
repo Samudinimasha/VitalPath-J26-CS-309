@@ -14,7 +14,7 @@ class ReplayConfig:
     Times are in seconds; timestamps are UNIX epoch seconds.
     """
 
-    # Number of sequence numbers tracked behind the highest accepted one.
+    # How many packet numbers are remembered behind the highest accepted one.
     window_size: int = 1024
     # A packet older than this, relative to the receiver clock, is stale.
     max_age_s: float = 30.0
@@ -23,15 +23,15 @@ class ReplayConfig:
     # How far a packet's timestamp may fall behind the newest accepted
     # timestamp for that device (tolerates out-of-order delivery).
     backward_tolerance_s: float = 1.0
-    # Forward jump in sequence number above which a packet is flagged as a
+    # Forward jump in packet number above which a packet is flagged as a
     # possible injection (scenario S10) and the window is not advanced.
-    max_seq_jump: int = 1024
+    max_packet_jump: int = 1024
 
     def __post_init__(self) -> None:
         if self.window_size <= 0:
             raise ValueError("window_size must be positive")
-        if self.max_seq_jump <= 0:
-            raise ValueError("max_seq_jump must be positive")
+        if self.max_packet_jump <= 0:
+            raise ValueError("max_packet_jump must be positive")
         for name in ("max_age_s", "future_skew_s", "backward_tolerance_s"):
             if getattr(self, name) < 0:
                 raise ValueError(f"{name} must be non-negative")

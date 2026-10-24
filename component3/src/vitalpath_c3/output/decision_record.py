@@ -24,14 +24,13 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey,
 @dataclass(frozen=True)
 class DecisionRecord:
     device_id: object
-    seq: object
+    packet_id: object  # Component 2's packet ID
     received_at: float
     decision: str  # ACCEPT, FLAG or DISCARD
     label: Optional[str]  # Normal, Borderline or Flagged; None when discarded
     score: Optional[int]
     rules: Tuple[str, ...]
     case_id: object = None  # copied from the packet header for Component 4
-    packet_id: object = None  # Component 2's own packet ID, when present
     signature: str = ""
 
     def signed_bytes(self) -> bytes:

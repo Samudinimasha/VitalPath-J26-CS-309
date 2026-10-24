@@ -74,14 +74,15 @@ def pipeline(clock, decryptor, signer) -> Pipeline:
 CASE = "CASE001"
 
 
-def packet(seq, vitals=NORMAL, ts=None):
-    return seal(PacketHeader(DEVICE, seq, T0 if ts is None else ts, CASE), vitals, KEY)
+def packet(n, vitals=NORMAL, ts=None):
+    """Genuine sealed packet whose packet ID counter is n (PKT-00000n)."""
+    return seal(PacketHeader(DEVICE, f"PKT-{n:06d}", T0 if ts is None else ts, CASE), vitals, KEY)
 
 
-def stream(pipeline, clock, seqs, interval=1.0):
+def stream(pipeline, clock, numbers, interval=1.0):
     """Send a legitimate stream at 1 Hz."""
-    for seq in seqs:
-        r = pipeline.process(packet(seq, ts=clock.now))
+    for n in numbers:
+        r = pipeline.process(packet(n, ts=clock.now))
         assert r.record.decision == "ACCEPT", r.explain()
         clock.now += interval
 
@@ -140,8 +141,8 @@ def test_s7_slightly_elevated_hr_borderline_not_discarded(pipeline):
 
 def test_s8_flood_of_fifty_in_one_second(pipeline, clock):
     results = []
-    for seq in range(1, 51):
-        results.append(pipeline.process(packet(seq, ts=clock.now)))
+    for n in range(1, 51):
+        results.append(pipeline.process(packet(n, ts=clock.now)))
         clock.now += 0.02
     discarded = [r for r in results if r.record.rules == ("R-RATE-LIMIT",)]
     assert len(discarded) == 30
@@ -157,17 +158,17 @@ def test_s9_corrupted_timestamp_discarded(pipeline, decryptor):
     assert decryptor.calls == 0
 
 
-def test_s10_authentic_sequence_jump_flagged(pipeline, clock):
+def test_s10_authentic_packet_id_jump_flagged(pipeline, clock):
     stream(pipeline, clock, range(1, 4))
     r = pipeline.process(packet(50_000, ts=clock.now))
     assert outcome(r) == ("FLAG", "Flagged")
-    assert r.record.rules[0] == "R-SEQ-JUMP"
+    assert r.record.rules[0] == "R-PACKET-JUMP"
     # It decrypted authentically, so the window moved and the stream continues.
     r = pipeline.process(packet(50_001, ts=clock.now))
     assert outcome(r) == ("ACCEPT", "Normal")
 
 
-def test_s10_forged_sequence_jump_discarded_without_lockout(pipeline, clock):
+def test_s10_forged_packet_id_jump_discarded_without_lockout(pipeline, clock):
     stream(pipeline, clock, range(1, 4))
     genuine = packet(50_000, ts=clock.now)
     forged = EncryptedPacket(genuine.header, b"\x00" * len(genuine.payload))
@@ -191,8 +192,8 @@ def test_s11_replayed_impossible_value_discarded_before_analysis(pipeline, decry
 def test_s12_replayed_packet_never_decrypted(pipeline, decryptor, clock):
     stream(pipeline, clock, range(1, 6))
     assert decryptor.calls == 5
-    for seq in range(1, 6):
-        r = pipeline.process(packet(seq, ts=T0 + seq - 1))
+    for n in range(1, 6):
+        r = pipeline.process(packet(n, ts=T0 + n - 1))
         assert r.record.decision == "DISCARD"
         assert not r.decrypted
     assert decryptor.calls == 5
@@ -201,13 +202,13 @@ def test_s12_replayed_packet_never_decrypted(pipeline, decryptor, clock):
 # --- Beyond Table 6 ----------------------------------------------------------
 
 
-def test_tampered_payload_discarded_and_does_not_burn_sequence(pipeline):
+def test_tampered_payload_discarded_and_does_not_burn_packet_id(pipeline):
     genuine = packet(1)
     payload = bytearray(genuine.payload)
     payload[20] ^= 0xFF
     r = pipeline.process(EncryptedPacket(genuine.header, bytes(payload)))
     assert r.record.rules == ("R-DECRYPT-FAILED",)
-    # The genuine packet with the same sequence number still gets through.
+    # The genuine packet with the same packet ID still gets through.
     assert outcome(pipeline.process(genuine)) == ("ACCEPT", "Normal")
 
 
@@ -231,14 +232,14 @@ def test_records_carry_case_id_for_component4(pipeline, signer):
 
 
 def test_component2_style_packet_ids_end_to_end(pipeline):
-    """Packets identified only by Component 2's packet_id (no seq)."""
+    """Packets using Component 2's own packet_id style (mimic_00001 ...)."""
     def c2_packet(n):
-        return seal(PacketHeader(DEVICE, None, T0, CASE, packet_id=f"mimic_{n:05d}"), NORMAL, KEY)
+        return seal(PacketHeader(DEVICE, f"mimic_{n:05d}", T0, CASE), NORMAL, KEY)
 
     first = c2_packet(1)
     r = pipeline.process(first)
     assert outcome(r) == ("ACCEPT", "Normal")
-    assert (r.record.packet_id, r.record.seq) == ("mimic_00001", 1)
+    assert r.record.packet_id == "mimic_00001"
     assert outcome(pipeline.process(c2_packet(2))) == ("ACCEPT", "Normal")
     r = pipeline.process(first)
     assert r.record.rules == ("R-REPLAY-DUPLICATE",)
@@ -256,8 +257,8 @@ def test_relabelling_packet_with_another_case_is_discarded(pipeline):
 
 def test_end_to_end_latency_under_20ms(pipeline, clock):
     latencies = []
-    for seq in range(1, 501):
+    for n in range(1, 501):
         clock.now += 0.1
-        latencies.append(pipeline.process(packet(seq, ts=clock.now)).latency_ms)
+        latencies.append(pipeline.process(packet(n, ts=clock.now)).latency_ms)
     latencies.sort()
     assert latencies[int(len(latencies) * 0.99)] < 20.0

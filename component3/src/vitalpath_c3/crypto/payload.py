@@ -2,10 +2,10 @@
 
 Component 2's actual cipher has not been fixed yet, so this module uses
 AES-256-GCM from the ``cryptography`` package as a stand-in. The clear-text
-header (device ID, sequence number, timestamp, case ID, packet ID) is bound to the
+header (device ID, packet ID, timestamp, case ID) is bound to the
 ciphertext as associated data: if anyone alters the header in transit, for
 example to file readings under another patient's case, decryption fails.
-That is what lets the pipeline trust a flagged sequence jump once its payload
+That is what lets the pipeline trust a flagged packet ID jump once its payload
 decrypts (see ReplayDetectionEngine.confirm_jump).
 
 Wire layout of the sealed payload: 12-byte nonce || ciphertext || 16-byte tag.
@@ -61,7 +61,7 @@ class PayloadError(Exception):
 def header_aad(header: PacketHeader) -> bytes:
     """Canonical encoding of the header used as associated data."""
     return json.dumps(
-        [header.device_id, header.seq, header.timestamp, header.case_id, header.packet_id],
+        [header.device_id, header.packet_id, header.timestamp, header.case_id],
         separators=(",", ":"),
     ).encode()
 

@@ -6,7 +6,7 @@
     "threshold_invalid": 3,
     "correlation_concerning": 2,
     "correlation_inconsistent": 3,
-    "replay_sequence_jump": 3
+    "replay_packet_jump": 3
   },
   "labels": [
     {"label": "Normal", "max_score": 0},

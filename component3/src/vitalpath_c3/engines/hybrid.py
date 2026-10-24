@@ -77,7 +77,7 @@ class HybridDecisionEngine:
         contributions: List[Contribution] = []
         if replay.outcome is ReplayOutcome.ACCEPT_FLAGGED:
             contributions.append(
-                Contribution(replay.rule.value, self.points["replay_sequence_jump"], replay.detail)
+                Contribution(replay.rule.value, self.points["replay_packet_jump"], replay.detail)
             )
         for f in threshold.findings:
             key = {

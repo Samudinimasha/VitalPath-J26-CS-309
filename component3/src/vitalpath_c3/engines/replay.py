@@ -1,24 +1,25 @@
 """Replay Detection Engine (WBS T9).
 
 First-stage gate of Component 3. It reads only the clear-text header
-(device ID, sequence number, timestamp) and never touches the encrypted
+(device ID, packet ID, timestamp) and never touches the encrypted
 payload, so a packet discarded here is never decrypted.
 
 Per device, the engine keeps an anti-replay window in the style of DTLS
 (RFC 6347 s4.1.2.6) and IPsec (RFC 4303 s3.4.3): the highest accepted
-sequence number plus a bitmap of which of the ``window_size`` sequence
-numbers behind it have been accepted. State is keyed by device ID rather than
+packet number plus a bitmap of which of the ``window_size`` packet numbers
+behind it have been accepted. The packet number is the counter inside
+Component 2's packet ID (PKT-000042 -> 42). State is keyed by device ID rather than
 by transport session, so the window persists across a 5G handover (FR2).
 
 Checks, in order, each tied to a named rule:
 
 1. Header well-formed                          -> R-MALFORMED-HEADER   (S9)
-2. Sequence number not already accepted        -> R-REPLAY-DUPLICATE   (S2, S3)
-3. Sequence number not older than the window   -> R-REPLAY-OUTSIDE-WINDOW
+2. Packet ID not already accepted              -> R-REPLAY-DUPLICATE   (S2, S3)
+3. Packet ID not older than the window         -> R-REPLAY-OUTSIDE-WINDOW
 4. Timestamp not older than ``max_age_s``      -> R-TS-STALE
 5. Timestamp not ahead by more than skew       -> R-TS-FUTURE
 6. Timestamp not behind newest by > tolerance  -> R-TS-REGRESSION
-7. Forward jump no larger than ``max_seq_jump`` -> R-SEQ-JUMP (flag)   (S10)
+7. Forward jump no larger than ``max_packet_jump`` -> R-PACKET-JUMP (flag) (S10)
 
 A flagged jump never moves the window by itself; see ``confirm_jump``.
 
@@ -34,7 +35,7 @@ from enum import Enum
 from typing import Callable, Dict, Optional
 
 from vitalpath_c3.config import ReplayConfig
-from vitalpath_c3.models import SEQ_MAX, PacketHeader, packet_id_number
+from vitalpath_c3.models import PACKET_NUMBER_MAX, PacketHeader
 from vitalpath_c3.rules import Rule
 
 logger = logging.getLogger(__name__)
@@ -52,7 +53,7 @@ class ReplayVerdict:
     outcome: ReplayOutcome
     rule: Rule
     device_id: object
-    seq: object
+    packet_id: object
     detail: str = ""
 
     @property
@@ -63,13 +64,13 @@ class ReplayVerdict:
 
 @dataclass
 class _DeviceWindow:
-    highest_seq: int
-    # Bit i set means sequence number (highest_seq - i) has been accepted.
+    highest_number: int
+    # Bit i set means packet number (highest_number - i) has been accepted.
     bitmap: int
     highest_ts: float
-    # Sequence number of the most recent packet flagged for an excessive jump.
+    # Packet number of the most recent packet flagged for an excessive jump.
     # It is merged into the window only through confirm_jump().
-    pending_jump_seq: Optional[int] = None
+    pending_jump_number: Optional[int] = None
     pending_jump_ts: float = 0.0
 
 
@@ -90,7 +91,7 @@ class ReplayDetectionEngine:
         With ``commit=True`` an accepted packet is recorded at once. The
         pipeline passes ``commit=False`` and calls :meth:`commit` only after
         the payload has decrypted and authenticated, so a forged packet can
-        never use up a sequence number and get the genuine packet rejected
+        never use up a packet ID and get the genuine packet rejected
         later (the same rule as RFC 4303 s3.4.3). Rejected packets never
         change the window.
         """
@@ -116,20 +117,20 @@ class ReplayDetectionEngine:
         if problem:
             return discard(header, Rule.MALFORMED_HEADER, problem)
 
-        seq: int = header.seq
+        number: int = header.number
         ts = float(header.timestamp)
         window = self._windows.get(header.device_id)
 
         if window is not None:
-            offset = window.highest_seq - seq
+            offset = window.highest_number - number
             if offset >= self.config.window_size:
                 return discard(
                     header,
                     Rule.REPLAY_OUTSIDE_WINDOW,
-                    f"seq {seq} is {offset} behind highest {window.highest_seq}",
+                    f"{header.packet_id} is {offset} behind the newest accepted packet",
                 )
-            if (offset >= 0 and window.bitmap >> offset & 1) or seq == window.pending_jump_seq:
-                return discard(header, Rule.REPLAY_DUPLICATE, f"seq {seq} already seen")
+            if (offset >= 0 and window.bitmap >> offset & 1) or number == window.pending_jump_number:
+                return discard(header, Rule.REPLAY_DUPLICATE, f"{header.packet_id} already seen")
 
         now = self._clock()
         if now - ts > self.config.max_age_s:
@@ -147,44 +148,44 @@ class ReplayDetectionEngine:
                 f"timestamp {window.highest_ts - ts:.3f}s behind newest accepted",
             )
 
-        if seq < window.highest_seq:
+        if number < window.highest_number:
             return _accept(header, Rule.REPLAY_ACCEPT, "out-of-order within window")
 
-        jump = seq - window.highest_seq
-        if jump > self.config.max_seq_jump:
+        jump = number - window.highest_number
+        if jump > self.config.max_packet_jump:
             if log:
-                logger.warning("Sequence jump: device=%s seq=%s jump=%d", header.device_id, seq, jump)
+                logger.warning("Packet ID jump: device=%s packet_id=%s jump=%d", header.device_id, header.packet_id, jump)
             return ReplayVerdict(
                 ReplayOutcome.ACCEPT_FLAGGED,
-                Rule.SEQ_JUMP,
+                Rule.PACKET_JUMP,
                 header.device_id,
-                seq,
-                f"jump of {jump} exceeds {self.config.max_seq_jump}; window not advanced",
+                header.packet_id,
+                f"jump of {jump} exceeds {self.config.max_packet_jump}; window not advanced",
             )
 
-        return _accept(header, Rule.REPLAY_ACCEPT, "in sequence")
+        return _accept(header, Rule.REPLAY_ACCEPT, "in order")
 
     def _record(self, header: PacketHeader) -> None:
         """Apply an accepted packet to the window. Assumes _evaluate passed."""
-        seq: int = header.seq
+        number: int = header.number
         ts = float(header.timestamp)
         window = self._windows.get(header.device_id)
         if window is None:
-            self._windows[header.device_id] = _DeviceWindow(highest_seq=seq, bitmap=1, highest_ts=ts)
-        elif seq < window.highest_seq:
+            self._windows[header.device_id] = _DeviceWindow(highest_number=number, bitmap=1, highest_ts=ts)
+        elif number < window.highest_number:
             # Late but unseen packet inside the window (out-of-order delivery).
-            window.bitmap |= 1 << (window.highest_seq - seq)
-        elif seq - window.highest_seq > self.config.max_seq_jump:
+            window.bitmap |= 1 << (window.highest_number - number)
+        elif number - window.highest_number > self.config.max_packet_jump:
             # An unauthenticated header alone never moves the window: two forged
             # far-ahead packets must not be able to lock the real device out.
             # The window only moves via confirm_jump(), once decryption has
             # proven the packet authentic.
-            window.pending_jump_seq = seq
+            window.pending_jump_number = number
             window.pending_jump_ts = ts
         else:
-            self._advance(window, seq, ts)
+            self._advance(window, number, ts)
 
-    def confirm_jump(self, device_id: str, seq: int) -> bool:
+    def confirm_jump(self, device_id: str, number: int) -> bool:
         """Advance the window to a flagged jump once it is proven authentic.
 
         Called by the pipeline after the packet's payload has decrypted and
@@ -192,45 +193,45 @@ class ReplayDetectionEngine:
         True if the window was moved.
         """
         window = self._windows.get(device_id)
-        if window is None or window.pending_jump_seq != seq:
+        if window is None or window.pending_jump_number != number:
             return False
-        self._advance(window, seq, window.pending_jump_ts)
+        self._advance(window, number, window.pending_jump_ts)
         logger.info(
-            "Sequence jump confirmed: rule=%s device=%s seq=%s",
-            Rule.SEQ_JUMP_CONFIRMED.value,
+            "Packet ID jump confirmed: rule=%s device=%s number=%s",
+            Rule.PACKET_JUMP_CONFIRMED.value,
             device_id,
-            seq,
+            number,
         )
         return True
 
-    def _advance(self, window: _DeviceWindow, seq: int, ts: float) -> None:
-        """Slide the window forward so that ``seq`` becomes the highest accepted."""
-        shift = seq - window.highest_seq
+    def _advance(self, window: _DeviceWindow, number: int, ts: float) -> None:
+        """Slide the window forward so that ``number`` becomes the highest accepted."""
+        shift = number - window.highest_number
         window.bitmap = ((window.bitmap << shift) | 1) & self._mask
-        window.highest_seq = seq
+        window.highest_number = number
         window.highest_ts = max(window.highest_ts, ts)
-        pending = window.pending_jump_seq
-        if pending is not None and pending <= seq:
+        pending = window.pending_jump_number
+        if pending is not None and pending <= number:
             # The regular stream has caught up with the flagged packet; record
             # it as seen so it cannot be replayed later.
-            offset = seq - pending
+            offset = number - pending
             if offset < self.config.window_size:
                 window.bitmap |= 1 << offset
-            window.pending_jump_seq = None
+            window.pending_jump_number = None
 
     def _discard(self, header: PacketHeader, rule: Rule, detail: str) -> ReplayVerdict:
         verdict = ReplayVerdict(
             ReplayOutcome.DISCARD,
             rule,
             getattr(header, "device_id", None),
-            getattr(header, "seq", None),
+            getattr(header, "packet_id", None),
             detail,
         )
         logger.warning(
-            "Replay gate discard: rule=%s device=%s seq=%s (%s)",
+            "Replay gate discard: rule=%s device=%s packet_id=%s (%s)",
             rule.value,
             verdict.device_id,
-            verdict.seq,
+            verdict.packet_id,
             detail,
         )
         return verdict
@@ -238,12 +239,12 @@ class ReplayDetectionEngine:
 
 def _discard_quietly(header: PacketHeader, rule: Rule, detail: str) -> ReplayVerdict:
     return ReplayVerdict(
-        ReplayOutcome.DISCARD, rule, getattr(header, "device_id", None), getattr(header, "seq", None), detail
+        ReplayOutcome.DISCARD, rule, getattr(header, "device_id", None), getattr(header, "packet_id", None), detail
     )
 
 
 def _accept(header: PacketHeader, rule: Rule, detail: str) -> ReplayVerdict:
-    return ReplayVerdict(ReplayOutcome.ACCEPT, rule, header.device_id, header.seq, detail)
+    return ReplayVerdict(ReplayOutcome.ACCEPT, rule, header.device_id, header.packet_id, detail)
 
 
 def _malformed_reason(header: object) -> Optional[str]:
@@ -251,15 +252,11 @@ def _malformed_reason(header: object) -> Optional[str]:
         return "header missing or not a PacketHeader"
     if not isinstance(header.device_id, str) or not header.device_id:
         return "device_id must be a non-empty string"
-    # bool is a subclass of int; exclude it explicitly.
-    if header.seq is None and header.packet_id is not None:
-        return "packet_id must be letters, '_' or '-', then a counter (e.g. mimic_00042)"
-    if not isinstance(header.seq, int) or isinstance(header.seq, bool):
-        return "seq must be an integer"
-    if header.packet_id is not None and packet_id_number(header.packet_id) != header.seq:
-        return "packet_id and seq disagree"
-    if not 0 <= header.seq <= SEQ_MAX:
-        return "seq outside unsigned 64-bit range"
+    number = header.number
+    if number is None:
+        return "packet_id must be letters, '_' or '-', then a counter (e.g. PKT-000042)"
+    if number > PACKET_NUMBER_MAX:
+        return "packet_id counter outside unsigned 64-bit range"
     if header.case_id is not None and (not isinstance(header.case_id, str) or not header.case_id):
         return "case_id must be a non-empty string when present"
     ts = header.timestamp

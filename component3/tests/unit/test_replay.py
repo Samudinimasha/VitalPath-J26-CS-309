@@ -9,7 +9,7 @@ import pytest
 
 from vitalpath_c3.config import ReplayConfig
 from vitalpath_c3.engines.replay import ReplayDetectionEngine, ReplayOutcome
-from vitalpath_c3.models import SEQ_MAX, PacketHeader
+from vitalpath_c3.models import PACKET_NUMBER_MAX, PacketHeader
 from vitalpath_c3.rules import Rule
 
 T0 = 1_800_000_000.0
@@ -34,16 +34,22 @@ def engine(clock: FakeClock) -> ReplayDetectionEngine:
     return ReplayDetectionEngine(ReplayConfig(), clock=clock)
 
 
-def hdr(seq, ts=None, device=DEVICE) -> PacketHeader:
-    return PacketHeader(device_id=device, seq=seq, timestamp=T0 if ts is None else ts)
+def pid(n: int) -> str:
+    """Packet ID in Component 2's format: 42 -> PKT-000042."""
+    return f"PKT-{n:06d}"
 
 
-def feed(engine, clock, seqs, start_ts=T0, interval=0.1):
+def hdr(n, ts=None, device=DEVICE) -> PacketHeader:
+    """Header for the packet whose counter is n."""
+    return PacketHeader(device_id=device, packet_id=pid(n), timestamp=T0 if ts is None else ts)
+
+
+def feed(engine, clock, numbers, start_ts=T0, interval=0.1):
     """Send a legitimate stream, advancing the clock with each packet."""
     ts = start_ts
-    for seq in seqs:
+    for n in numbers:
         clock.now = ts
-        verdict = engine.check(hdr(seq, ts))
+        verdict = engine.check(hdr(n, ts))
         assert verdict.outcome is ReplayOutcome.ACCEPT, verdict
         ts += interval
     return ts - interval
@@ -59,7 +65,7 @@ def test_first_packet_accepted(engine):
     assert v.passed
 
 
-def test_first_packet_may_start_at_any_sequence(engine):
+def test_first_packet_may_start_at_any_packet_id(engine):
     assert engine.check(hdr(123_456)).outcome is ReplayOutcome.ACCEPT
 
 
@@ -67,7 +73,7 @@ def test_in_order_stream_accepted(engine, clock):
     feed(engine, clock, range(1, 2001))
 
 
-def test_gap_in_sequence_within_jump_cap_accepted(engine, clock):
+def test_gap_in_packet_ids_within_jump_cap_accepted(engine, clock):
     feed(engine, clock, [1])
     assert engine.check(hdr(1 + 1024, T0 + 0.1)).outcome is ReplayOutcome.ACCEPT
 
@@ -96,7 +102,7 @@ def test_devices_have_independent_windows(engine):
 
 
 def test_duplicate_of_highest_rejected(engine):
-    """S2: sequence number already seen within the sliding window."""
+    """S2: packet ID already seen within the sliding window."""
     engine.check(hdr(10))
     v = engine.check(hdr(10))
     assert v.outcome is ReplayOutcome.DISCARD
@@ -117,7 +123,7 @@ def test_out_of_order_packet_rejected_on_second_delivery(engine, clock):
     assert engine.check(hdr(3, clock.now)).rule is Rule.REPLAY_DUPLICATE
 
 
-def test_sequence_older_than_window_rejected(clock):
+def test_packet_id_older_than_window_rejected(clock):
     engine = ReplayDetectionEngine(ReplayConfig(window_size=8), clock=clock)
     engine.check(hdr(100))
     # 92 is window_size behind: outside the window even though never seen.
@@ -191,20 +197,20 @@ def test_timestamp_regression_within_tolerance_accepted(engine, clock):
     "header",
     [
         None,
-        PacketHeader(device_id=DEVICE, seq=1, timestamp=None),
-        PacketHeader(device_id=DEVICE, seq=1, timestamp="1800000000"),
-        PacketHeader(device_id=DEVICE, seq=1, timestamp=float("nan")),
-        PacketHeader(device_id=DEVICE, seq=1, timestamp=float("inf")),
-        PacketHeader(device_id=DEVICE, seq=1, timestamp=True),
-        PacketHeader(device_id=DEVICE, seq=None, timestamp=T0),
-        PacketHeader(device_id=DEVICE, seq=1.0, timestamp=T0),
-        PacketHeader(device_id=DEVICE, seq=True, timestamp=T0),
-        PacketHeader(device_id=DEVICE, seq=-1, timestamp=T0),
-        PacketHeader(device_id=DEVICE, seq=SEQ_MAX + 1, timestamp=T0),
-        PacketHeader(device_id="", seq=1, timestamp=T0),
-        PacketHeader(device_id=None, seq=1, timestamp=T0),
-        PacketHeader(device_id=DEVICE, seq=1, timestamp=T0, case_id=""),
-        PacketHeader(device_id=DEVICE, seq=1, timestamp=T0, case_id=42),
+        PacketHeader(device_id=DEVICE, packet_id="PKT-000001", timestamp=None),
+        PacketHeader(device_id=DEVICE, packet_id="PKT-000001", timestamp="1800000000"),
+        PacketHeader(device_id=DEVICE, packet_id="PKT-000001", timestamp=float("nan")),
+        PacketHeader(device_id=DEVICE, packet_id="PKT-000001", timestamp=float("inf")),
+        PacketHeader(device_id=DEVICE, packet_id="PKT-000001", timestamp=True),
+        PacketHeader(device_id=DEVICE, packet_id=None, timestamp=T0),
+        PacketHeader(device_id=DEVICE, packet_id=1, timestamp=T0),
+        PacketHeader(device_id=DEVICE, packet_id=True, timestamp=T0),
+        PacketHeader(device_id=DEVICE, packet_id="PKT--1", timestamp=T0),
+        PacketHeader(device_id=DEVICE, packet_id=f"PKT-{PACKET_NUMBER_MAX + 1}", timestamp=T0),
+        PacketHeader(device_id="", packet_id="PKT-000001", timestamp=T0),
+        PacketHeader(device_id=None, packet_id="PKT-000001", timestamp=T0),
+        PacketHeader(device_id=DEVICE, packet_id="PKT-000001", timestamp=T0, case_id=""),
+        PacketHeader(device_id=DEVICE, packet_id="PKT-000001", timestamp=T0, case_id=42),
     ],
 )
 def test_malformed_header_discarded(engine, header):
@@ -220,26 +226,21 @@ def test_malformed_header_discarded(engine, header):
     "packet_id, number",
     [("mimic_00042", 42), ("pkt_001", 1), ("PKT-00001", 1), ("PKT-000123", 123)],
 )
-def test_sequence_read_from_component2_packet_id(packet_id, number):
-    assert PacketHeader(DEVICE, None, T0, packet_id=packet_id).seq == number
+def test_number_read_from_component2_packet_id(packet_id, number):
+    assert PacketHeader(DEVICE, packet_id, T0).number == number
 
 
 @pytest.mark.parametrize("packet_id", ["pkt_9f3a71c2be04", "00042", "mimic_", "pkt 001", "pkt_-1", 42])
 def test_unusable_packet_id_is_malformed(engine, packet_id):
-    v = engine.check(PacketHeader(DEVICE, None, T0, packet_id=packet_id))
+    v = engine.check(PacketHeader(DEVICE, packet_id, T0))
     assert v.rule is Rule.MALFORMED_HEADER
     assert "packet_id" in v.detail
 
 
-def test_packet_id_and_seq_must_agree(engine):
-    v = engine.check(PacketHeader(DEVICE, 7, T0, packet_id="mimic_00008"))
-    assert v.rule is Rule.MALFORMED_HEADER
-
-
 def test_replay_detected_using_packet_id(engine):
-    assert engine.check(PacketHeader(DEVICE, None, T0, packet_id="mimic_00001")).passed
-    assert engine.check(PacketHeader(DEVICE, None, T0, packet_id="mimic_00002")).passed
-    v = engine.check(PacketHeader(DEVICE, None, T0, packet_id="mimic_00001"))
+    assert engine.check(PacketHeader(DEVICE, "mimic_00001", T0)).passed
+    assert engine.check(PacketHeader(DEVICE, "mimic_00002", T0)).passed
+    v = engine.check(PacketHeader(DEVICE, "mimic_00001", T0))
     assert v.rule is Rule.REPLAY_DUPLICATE
 
 
@@ -251,7 +252,7 @@ def test_component2_shared_counter_across_devices(engine):
     devices = ["ecg_lead_II", "pulse_ox_01", "bp_cuff_01"]
     sent = []
     for i in range(1, 301):
-        header = PacketHeader(rng.choice(devices), None, T0, packet_id=f"mimic_{i:05d}")
+        header = PacketHeader(rng.choice(devices), f"mimic_{i:05d}", T0)
         assert engine.check(header).rule is Rule.REPLAY_ACCEPT
         sent.append(header)
     for header in rng.sample(sent, 20):
@@ -259,22 +260,22 @@ def test_component2_shared_counter_across_devices(engine):
 
 
 def test_case_id_is_optional_and_accepted_when_valid(engine):
-    assert engine.check(PacketHeader(DEVICE, 1, T0, "CASE001")).passed
-    assert engine.check(PacketHeader(DEVICE, 2, T0)).passed
+    assert engine.check(PacketHeader(DEVICE, pid(1), T0, "CASE001")).passed
+    assert engine.check(PacketHeader(DEVICE, pid(2), T0)).passed
 
 
-def test_max_sequence_value_accepted(engine):
-    assert engine.check(hdr(SEQ_MAX)).passed
+def test_max_packet_number_accepted(engine):
+    assert engine.check(PacketHeader(DEVICE, f"PKT-{PACKET_NUMBER_MAX}", T0)).passed
 
 
-# --- Sequence jump (S10) ----------------------------------------------------
+# --- Packet ID jump (S10) ---------------------------------------------------
 
 
 def test_large_jump_flagged_and_window_not_advanced(engine, clock):
     feed(engine, clock, range(1, 11))
     v = engine.check(hdr(10 + 1025, clock.now))
     assert v.outcome is ReplayOutcome.ACCEPT_FLAGGED
-    assert v.rule is Rule.SEQ_JUMP
+    assert v.rule is Rule.PACKET_JUMP
     assert v.passed
     # Legitimate stream continues unaffected.
     assert engine.check(hdr(11, clock.now)).rule is Rule.REPLAY_ACCEPT
@@ -290,9 +291,9 @@ def test_two_forged_jumps_cannot_lock_out_real_device(engine, clock):
     """Regression: found in the live simulator run. Two injected far-ahead
     packets used to resynchronise the window and discard all real traffic."""
     feed(engine, clock, range(1, 11))
-    assert engine.check(hdr(50_010, clock.now)).rule is Rule.SEQ_JUMP
-    assert engine.check(hdr(50_082, clock.now)).rule is Rule.SEQ_JUMP
-    assert engine.check(hdr(50_083, clock.now)).rule is Rule.SEQ_JUMP
+    assert engine.check(hdr(50_010, clock.now)).rule is Rule.PACKET_JUMP
+    assert engine.check(hdr(50_082, clock.now)).rule is Rule.PACKET_JUMP
+    assert engine.check(hdr(50_083, clock.now)).rule is Rule.PACKET_JUMP
     feed(engine, clock, range(11, 21), start_ts=clock.now)
 
 
@@ -300,8 +301,8 @@ def test_legitimate_large_gap_is_flagged_not_discarded(engine, clock):
     """Without confirmation, a real device that skips far ahead is still
     delivered (flagged) and never discarded."""
     feed(engine, clock, [1])
-    for seq in (5000, 5001, 5002):
-        v = engine.check(hdr(seq, clock.now))
+    for n in (5000, 5001, 5002):
+        v = engine.check(hdr(n, clock.now))
         assert v.outcome is ReplayOutcome.ACCEPT_FLAGGED
         assert v.passed
 
@@ -325,9 +326,9 @@ def test_confirm_jump_ignores_unknown_packets(engine, clock):
 
 
 def test_flagged_packet_recorded_when_stream_catches_up(clock):
-    engine = ReplayDetectionEngine(ReplayConfig(max_seq_jump=10), clock=clock)
+    engine = ReplayDetectionEngine(ReplayConfig(max_packet_jump=10), clock=clock)
     feed(engine, clock, [1])
-    assert engine.check(hdr(20, clock.now)).rule is Rule.SEQ_JUMP
+    assert engine.check(hdr(20, clock.now)).rule is Rule.PACKET_JUMP
     feed(engine, clock, range(2, 20), start_ts=clock.now)
     engine.check(hdr(21, clock.now))
     assert engine.check(hdr(20, clock.now)).rule is Rule.REPLAY_DUPLICATE
@@ -343,9 +344,9 @@ def test_check_without_commit_leaves_window_unchanged(engine, clock):
     assert engine.check(hdr(2, clock.now), commit=False).passed
 
 
-def test_forged_packet_cannot_burn_a_sequence_number(engine, clock):
+def test_forged_packet_cannot_burn_a_packet_id(engine, clock):
     """A packet that fails decryption is never committed, so the genuine
-    packet with the same sequence number is still accepted afterwards."""
+    packet with the same packet ID is still accepted afterwards."""
     feed(engine, clock, [1])
     forged = hdr(2, clock.now)
     assert engine.check(forged, commit=False).passed  # decryption then fails
@@ -376,8 +377,8 @@ def test_commit_of_malformed_header_is_refused(engine):
 # --- 5G handover / reconnection (S3, S4, FR2) --------------------------------
 
 
-def test_handover_next_sequence_after_gap_accepted(engine, clock):
-    """S4: legitimate packet right after a handover gap, correct next seq."""
+def test_handover_next_packet_after_gap_accepted(engine, clock):
+    """S4: legitimate packet right after a handover gap, correct next packet ID."""
     last_ts = feed(engine, clock, range(1, 101))
     # Connection drops for 3 s while the ambulance changes cell.
     clock.now = last_ts + 3.0
@@ -408,7 +409,7 @@ def test_handover_replay_of_pre_reconnection_packet_rejected(engine, clock):
 
 
 def test_handover_replay_with_refreshed_timestamp_rejected(engine, clock):
-    """Attacker rewrites the clear-text timestamp; sequence still catches it."""
+    """Attacker rewrites the clear-text timestamp; the packet ID still catches it."""
     last_ts = feed(engine, clock, range(1, 101))
     clock.now = last_ts + 3.0
     assert engine.check(hdr(95, clock.now)).rule is Rule.REPLAY_DUPLICATE
@@ -429,7 +430,7 @@ def test_window_persists_across_handover(engine, clock):
     "kwargs",
     [
         {"window_size": 0},
-        {"max_seq_jump": 0},
+        {"max_packet_jump": 0},
         {"max_age_s": -1},
         {"future_skew_s": -1},
         {"backward_tolerance_s": -1},
@@ -444,8 +445,8 @@ def test_check_is_well_within_latency_budget(clock):
     engine = ReplayDetectionEngine(ReplayConfig(), clock=clock)
     n = 20_000
     start = time.perf_counter()
-    for seq in range(n):
-        engine.check(hdr(seq))
+    for i in range(n):
+        engine.check(hdr(i))
     per_packet_ms = (time.perf_counter() - start) * 1000 / n
     # The whole pipeline has 20 ms; the replay gate should use a tiny fraction.
     assert per_packet_ms < 1.0

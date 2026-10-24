@@ -40,13 +40,13 @@ DTLS/IPsec-style anti-replay bitmap window per device ID (persists across 5G han
 
 | Parameter | Default |
 |---|---|
-| `window_size` | 1024 sequence numbers |
+| `window_size` | 1024 packet IDs |
 | `max_age_s` | 30 s |
 | `future_skew_s` | 2 s |
 | `backward_tolerance_s` | 1 s |
-| `max_seq_jump` | 1024 |
+| `max_packet_jump` | 1024 |
 
-Sequence numbers are unsigned 64-bit; wraparound is not handled.
+Packets are identified by Component 2's `packet_id` (e.g. `PKT-000042`); the Replay Engine uses the counter inside it, per device. Counters are unsigned 64-bit; wraparound is not handled.
 
 ## Running tests
 

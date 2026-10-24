@@ -12,7 +12,7 @@ from vitalpath_c3.output.decision_record import (
 
 RECORD = DecisionRecord(
     device_id="amb-01",
-    seq=42,
+    packet_id="PKT-000042",
     received_at=1_800_000_000.5,
     decision="FLAG",
     label="Flagged",
@@ -53,9 +53,9 @@ def test_jsonl_sink_appends_one_line_per_record(tmp_path):
     signer = RecordSigner.generate()
     sink = JsonlSink(tmp_path / "decisions.jsonl")
     sink.append(signer.sign(RECORD))
-    sink.append(signer.sign(dataclasses.replace(RECORD, seq=43)))
+    sink.append(signer.sign(dataclasses.replace(RECORD, packet_id="PKT-000043")))
     lines = (tmp_path / "decisions.jsonl").read_text().splitlines()
-    assert [json.loads(line)["seq"] for line in lines] == [42, 43]
+    assert [json.loads(line)["packet_id"] for line in lines] == ["PKT-000042", "PKT-000043"]
 
 
 def test_record_from_file_still_verifies(tmp_path):
