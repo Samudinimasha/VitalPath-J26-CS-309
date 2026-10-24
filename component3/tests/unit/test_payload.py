@@ -54,7 +54,8 @@ def test_each_seal_uses_a_fresh_nonce():
 
 @pytest.mark.parametrize(
     "field, value",
-    [("seq", 43), ("timestamp", 1_800_000_000.26), ("device_id", "amb-02"), ("case_id", "CASE002")],
+    [("seq", 43), ("timestamp", 1_800_000_000.26), ("device_id", "amb-02"), ("case_id", "CASE002"),
+     ("packet_id", "pkt_042")],
 )
 def test_tampered_header_fails_authentication(field, value):
     packet = seal(HEADER, VITALS, KEY)

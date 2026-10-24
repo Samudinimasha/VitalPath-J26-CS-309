@@ -213,6 +213,51 @@ def test_malformed_header_discarded(engine, header):
     assert v.rule is Rule.MALFORMED_HEADER
 
 
+# --- Component 2's packet_id -------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "packet_id, number",
+    [("mimic_00042", 42), ("pkt_001", 1), ("PKT-00001", 1), ("PKT-000123", 123)],
+)
+def test_sequence_read_from_component2_packet_id(packet_id, number):
+    assert PacketHeader(DEVICE, None, T0, packet_id=packet_id).seq == number
+
+
+@pytest.mark.parametrize("packet_id", ["pkt_9f3a71c2be04", "00042", "mimic_", "pkt 001", "pkt_-1", 42])
+def test_unusable_packet_id_is_malformed(engine, packet_id):
+    v = engine.check(PacketHeader(DEVICE, None, T0, packet_id=packet_id))
+    assert v.rule is Rule.MALFORMED_HEADER
+    assert "packet_id" in v.detail
+
+
+def test_packet_id_and_seq_must_agree(engine):
+    v = engine.check(PacketHeader(DEVICE, 7, T0, packet_id="mimic_00008"))
+    assert v.rule is Rule.MALFORMED_HEADER
+
+
+def test_replay_detected_using_packet_id(engine):
+    assert engine.check(PacketHeader(DEVICE, None, T0, packet_id="mimic_00001")).passed
+    assert engine.check(PacketHeader(DEVICE, None, T0, packet_id="mimic_00002")).passed
+    v = engine.check(PacketHeader(DEVICE, None, T0, packet_id="mimic_00001"))
+    assert v.rule is Rule.REPLAY_DUPLICATE
+
+
+def test_component2_shared_counter_across_devices(engine):
+    """Component 2's dataset_loader numbers all packets with one counter and
+    picks a device at random, so each device sees rising numbers with gaps."""
+    import random
+    rng = random.Random(7)
+    devices = ["ecg_lead_II", "pulse_ox_01", "bp_cuff_01"]
+    sent = []
+    for i in range(1, 301):
+        header = PacketHeader(rng.choice(devices), None, T0, packet_id=f"mimic_{i:05d}")
+        assert engine.check(header).rule is Rule.REPLAY_ACCEPT
+        sent.append(header)
+    for header in rng.sample(sent, 20):
+        assert engine.check(header).rule is Rule.REPLAY_DUPLICATE
+
+
 def test_case_id_is_optional_and_accepted_when_valid(engine):
     assert engine.check(PacketHeader(DEVICE, 1, T0, "CASE001")).passed
     assert engine.check(PacketHeader(DEVICE, 2, T0)).passed

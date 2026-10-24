@@ -13,11 +13,12 @@ DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 5005
 
 
-def encode(device_id, seq, timestamp, payload: bytes, case_id=None) -> bytes:
-    return json.dumps(
-        {"case_id": case_id, "device_id": device_id, "seq": seq, "timestamp": timestamp,
-         "payload": payload.hex()}
-    ).encode()
+def encode(device_id, seq, timestamp, payload: bytes, case_id=None, packet_id=None) -> bytes:
+    fields = {"case_id": case_id, "device_id": device_id, "seq": seq, "timestamp": timestamp}
+    if packet_id is not None:
+        fields["packet_id"] = packet_id
+    fields["payload"] = payload.hex()
+    return json.dumps(fields).encode()
 
 
 def decode(datagram: bytes) -> EncryptedPacket:
@@ -38,5 +39,6 @@ def decode(datagram: bytes) -> EncryptedPacket:
         seq=obj.get("seq"),
         timestamp=obj.get("timestamp"),
         case_id=obj.get("case_id"),
+        packet_id=obj.get("packet_id"),
     )
     return EncryptedPacket(header=header, payload=payload)

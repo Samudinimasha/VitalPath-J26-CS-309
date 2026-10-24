@@ -31,6 +31,7 @@ class DecisionRecord:
     score: Optional[int]
     rules: Tuple[str, ...]
     case_id: object = None  # copied from the packet header for Component 4
+    packet_id: object = None  # Component 2's own packet ID, when present
     signature: str = ""
 
     def signed_bytes(self) -> bytes:

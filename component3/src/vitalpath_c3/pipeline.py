@@ -109,6 +109,7 @@ class Pipeline:
             record = DecisionRecord(
                 device_id=getattr(header, "device_id", None),
                 case_id=getattr(header, "case_id", None),
+                packet_id=getattr(header, "packet_id", None),
                 seq=getattr(header, "seq", None),
                 received_at=self._clock(),
                 decision="DISCARD",
@@ -120,6 +121,7 @@ class Pipeline:
             record = DecisionRecord(
                 device_id=header.device_id,
                 case_id=header.case_id,
+                packet_id=header.packet_id,
                 seq=header.seq,
                 received_at=self._clock(),
                 decision=decision.outcome.value,

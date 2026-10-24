@@ -34,7 +34,7 @@ from enum import Enum
 from typing import Callable, Dict, Optional
 
 from vitalpath_c3.config import ReplayConfig
-from vitalpath_c3.models import SEQ_MAX, PacketHeader
+from vitalpath_c3.models import SEQ_MAX, PacketHeader, packet_id_number
 from vitalpath_c3.rules import Rule
 
 logger = logging.getLogger(__name__)
@@ -252,8 +252,12 @@ def _malformed_reason(header: object) -> Optional[str]:
     if not isinstance(header.device_id, str) or not header.device_id:
         return "device_id must be a non-empty string"
     # bool is a subclass of int; exclude it explicitly.
+    if header.seq is None and header.packet_id is not None:
+        return "packet_id must be letters, '_' or '-', then a counter (e.g. mimic_00042)"
     if not isinstance(header.seq, int) or isinstance(header.seq, bool):
         return "seq must be an integer"
+    if header.packet_id is not None and packet_id_number(header.packet_id) != header.seq:
+        return "packet_id and seq disagree"
     if not 0 <= header.seq <= SEQ_MAX:
         return "seq outside unsigned 64-bit range"
     if header.case_id is not None and (not isinstance(header.case_id, str) or not header.case_id):

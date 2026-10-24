@@ -230,6 +230,21 @@ def test_records_carry_case_id_for_component4(pipeline, signer):
         assert verify_record(record, signer.public_key)
 
 
+def test_component2_style_packet_ids_end_to_end(pipeline):
+    """Packets identified only by Component 2's packet_id (no seq)."""
+    def c2_packet(n):
+        return seal(PacketHeader(DEVICE, None, T0, CASE, packet_id=f"mimic_{n:05d}"), NORMAL, KEY)
+
+    first = c2_packet(1)
+    r = pipeline.process(first)
+    assert outcome(r) == ("ACCEPT", "Normal")
+    assert (r.record.packet_id, r.record.seq) == ("mimic_00001", 1)
+    assert outcome(pipeline.process(c2_packet(2))) == ("ACCEPT", "Normal")
+    r = pipeline.process(first)
+    assert r.record.rules == ("R-REPLAY-DUPLICATE",)
+    assert r.record.packet_id == "mimic_00001"
+
+
 def test_relabelling_packet_with_another_case_is_discarded(pipeline):
     """An attacker cannot file a patient's readings under another case."""
     genuine = packet(1)
