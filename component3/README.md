@@ -72,6 +72,17 @@ PYTHONPATH=src python3 -m simulator.attack_demo
 
 Add `--auto` to run every scenario in turn (press Enter between them).
 
+## Try one engine on its own
+
+Type the vitals and see what a single engine does with them:
+
+```bash
+PYTHONPATH=src python3 -m simulator.try_engines threshold   --hr 150 --spo2 88
+PYTHONPATH=src python3 -m simulator.try_engines correlation --hr 64 --pulse 72 --spo2 13.9
+PYTHONPATH=src python3 -m simulator.try_engines decision    --hr 64 --pulse 72 --spo2 13.9
+PYTHONPATH=src python3 -m simulator.try_engines decryption  --hr 92 --spo2 98
+```
+
 ## Live demo
 
 Two terminals, from `component3/`. The receiver runs the full pipeline; the sender streams a real
