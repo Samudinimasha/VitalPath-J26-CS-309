@@ -1,7 +1,6 @@
 """Payload sealing and decryption: stand-in for Component 2's encryption.
 
-Component 2's actual cipher has not been fixed yet, so this module uses
-AES-256-GCM from the ``cryptography`` package as a stand-in. The clear-text
+this module uses AES-256-GCM from the ``cryptography`` package as a stand-in. The clear-text
 header (device ID, packet ID, timestamp, case ID) is bound to the
 ciphertext as associated data: if anyone alters the header in transit, for
 example to file readings under another patient's case, decryption fails.
