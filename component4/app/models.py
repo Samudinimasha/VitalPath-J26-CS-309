@@ -87,7 +87,7 @@ class TelemetryRecord(Base):
         ForeignKey("emergency_cases.id"), nullable=False
     )
     device_id: Mapped[str] = mapped_column(String, nullable=False)
-    sequence_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    packet_id: Mapped[str] = mapped_column(String, nullable=False)
     heart_rate: Mapped[int] = mapped_column(Integer, nullable=False)
     spo2: Mapped[float] = mapped_column(Float, nullable=False)
     systolic_bp: Mapped[int] = mapped_column(Integer, nullable=False)

@@ -107,7 +107,7 @@ def client():
             TelemetryRecord(
                 case_id="CASE001",
                 device_id="AMB001",
-                sequence_number=1,
+                packet_id="pkt_001",
                 heart_rate=82,
                 spo2=98.0,
                 systolic_bp=120,
@@ -118,7 +118,7 @@ def client():
             TelemetryRecord(
                 case_id="CASE001",
                 device_id="AMB001",
-                sequence_number=2,
+                packet_id="pkt_002",
                 heart_rate=110,
                 spo2=92.0,
                 systolic_bp=140,
@@ -129,7 +129,7 @@ def client():
             TelemetryRecord(
                 case_id="CASE001",
                 device_id="AMB001",
-                sequence_number=3,
+                packet_id="pkt_003",
                 heart_rate=90,
                 spo2=97.0,
                 systolic_bp=125,

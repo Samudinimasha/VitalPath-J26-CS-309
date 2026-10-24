@@ -48,7 +48,7 @@ class TelemetryResponse(BaseModel):
     id: int
     case_id: str
     device_id: str
-    sequence_number: int
+    packet_id: str
     heart_rate: int
     spo2: float
     systolic_bp: int
