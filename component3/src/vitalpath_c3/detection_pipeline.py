@@ -37,6 +37,16 @@ class Summary:
     label: Optional[str]  # Normal, Borderline or Flagged; None when discarded
     score: Optional[int]
     rules: Tuple[str, ...]
+    # Which stage made the final call: Flood guard, Replay Engine, Decryption
+    # (these can discard) or Decision Engine (ACCEPT / FLAG only).
+    decided_by: str
+
+
+DECIDED_BY_DISCARD = {
+    Rule.RATE_LIMIT: "Flood guard",
+    Rule.DECRYPT_FAILED: "Decryption",
+    Rule.PAYLOAD_MALFORMED: "Decryption",
+}
 
 
 @dataclass(frozen=True)
@@ -116,7 +126,16 @@ class Pipeline:
         packet_id = getattr(header, "packet_id", None)
         case_id = getattr(header, "case_id", None)
         if decision is None:
-            summary = Summary(device_id, packet_id, case_id, "DISCARD", None, None, (discard_rule.value,))
+            summary = Summary(
+                device_id,
+                packet_id,
+                case_id,
+                "DISCARD",
+                None,
+                None,
+                (discard_rule.value,),
+                DECIDED_BY_DISCARD.get(discard_rule, "Replay Engine"),
+            )
         else:
             summary = Summary(
                 device_id,
@@ -126,6 +145,7 @@ class Pipeline:
                 decision.label,
                 decision.score,
                 tuple(c.rule for c in decision.contributions),
+                "Decision Engine",
             )
         latency_ms = (time.perf_counter() - start) * 1000
         return PipelineResult(summary, decision, detail, latency_ms, decrypted, **stages)

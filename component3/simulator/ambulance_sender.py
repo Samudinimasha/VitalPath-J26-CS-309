@@ -76,12 +76,13 @@ class Ambulance:
     def event(self, name):
         say = lambda text: print(f"  >> {text}")
         if name == "replay":
-            say(f"ATTACK replay: resending captured {packet_id(self.count - 2)}")
-            self._send(self.captured[-3])
+            old = self.captured[-min(3, len(self.captured))]
+            say(f"ATTACK replay: resending captured {json.loads(old)['packet_id']}")
+            self._send(old)
         elif name == "handover":
             say("HANDOVER: link down for 3 s ...")
             time.sleep(3)
-            old = json.loads(self.captured[-2])
+            old = json.loads(self.captured[-min(2, len(self.captured))])
             say(f"ATTACK post-handover replay of {old['packet_id']} with refreshed timestamp")
             self._send(encode(old["device_id"], old["packet_id"], time.time(), bytes.fromhex(old["payload"]), old["case_id"]))
             say(f"stream resumes with {packet_id(self.count + 1)}")
