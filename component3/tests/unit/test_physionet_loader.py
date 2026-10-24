@@ -1,7 +1,7 @@
 import pytest
 
-from vitalpath_c3.data.loaders import load_vitals_csv
-from vitalpath_c3.models import VitalSigns
+from vitalpath_c3.data.physionet_loader import load_vitals_csv
+from vitalpath_c3.packet_models import VitalSigns
 
 
 def test_load_vitals_csv(tmp_path):

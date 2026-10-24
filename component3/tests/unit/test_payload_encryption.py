@@ -8,15 +8,15 @@ import time
 import pytest
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from vitalpath_c3.crypto.payload import (
+from vitalpath_c3.crypto.payload_encryption import (
     NONCE_BYTES,
     PayloadDecryptor,
     PayloadError,
     header_aad,
     seal,
 )
-from vitalpath_c3.models import EncryptedPacket, PacketHeader, VitalSigns
-from vitalpath_c3.rules import Rule
+from vitalpath_c3.packet_models import EncryptedPacket, PacketHeader, VitalSigns
+from vitalpath_c3.rule_ids import Rule
 
 KEY = AESGCM.generate_key(bit_length=256)
 HEADER = PacketHeader(device_id="amb-01", packet_id="PKT-000042", timestamp=1_800_000_000.25)

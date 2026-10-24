@@ -16,7 +16,7 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Callable, Deque, Dict
 
-from vitalpath_c3.rules import Rule
+from vitalpath_c3.rule_ids import Rule
 
 logger = logging.getLogger(__name__)
 

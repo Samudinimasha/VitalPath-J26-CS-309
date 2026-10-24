@@ -7,10 +7,10 @@ import time
 
 import pytest
 
-from vitalpath_c3.config import ReplayConfig
+from vitalpath_c3.replay_configurations import ReplayConfig
 from vitalpath_c3.engines.replay import ReplayDetectionEngine, ReplayOutcome
-from vitalpath_c3.models import PACKET_NUMBER_MAX, PacketHeader
-from vitalpath_c3.rules import Rule
+from vitalpath_c3.packet_models import PACKET_NUMBER_MAX, PacketHeader
+from vitalpath_c3.rule_ids import Rule
 
 T0 = 1_800_000_000.0
 DEVICE = "amb-01/ecg"

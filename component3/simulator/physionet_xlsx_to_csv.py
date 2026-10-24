@@ -1,7 +1,7 @@
 """Convert PhysioNet numerics exported to .xlsx into the simulator's CSV format.
 
 Usage (from component3/):
-    PYTHONPATH=src python3 -m simulator.convert_xlsx SOURCE.xlsx PROFILE OUT.csv
+    PYTHONPATH=src python3 -m simulator.physionet_xlsx_to_csv SOURCE.xlsx PROFILE OUT.csv
 
 PROFILE says how to read each export (column names, how missing values are
 written). Column A is elapsed time in days, as exported by PhysioNet.
@@ -14,7 +14,7 @@ import re
 import xml.etree.ElementTree as ET
 import zipfile
 
-from vitalpath_c3.data.loaders import CSV_COLUMNS
+from vitalpath_c3.data.physionet_loader import CSV_COLUMNS
 
 _NS = {"m": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
 

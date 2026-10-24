@@ -1,4 +1,4 @@
-"""Load baseline vital-sign recordings prepared by simulator/convert_xlsx.py.
+"""Load baseline vital-sign recordings prepared by simulator/physionet_xlsx_to_csv.py.
 
 CSV columns: t_s, hr, pulse, spo2, sbp, dbp, resp. An empty cell means no
 reading at that time.
@@ -8,7 +8,7 @@ import csv
 from pathlib import Path
 from typing import List, Tuple, Union
 
-from vitalpath_c3.models import VitalSigns
+from vitalpath_c3.packet_models import VitalSigns
 
 CSV_COLUMNS = ("t_s", "hr", "pulse", "spo2", "sbp", "dbp", "resp")
 

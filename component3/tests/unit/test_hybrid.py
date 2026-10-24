@@ -10,8 +10,8 @@ from vitalpath_c3.engines.correlation import CorrelationEngine
 from vitalpath_c3.engines.hybrid import HybridDecisionEngine, Outcome
 from vitalpath_c3.engines.replay import ReplayOutcome, ReplayVerdict
 from vitalpath_c3.engines.threshold import ThresholdEngine
-from vitalpath_c3.models import VitalSigns
-from vitalpath_c3.rules import Rule
+from vitalpath_c3.packet_models import VitalSigns
+from vitalpath_c3.rule_ids import Rule
 
 FRESH = ReplayVerdict(ReplayOutcome.ACCEPT, Rule.REPLAY_ACCEPT, "amb-01", "PKT-000001")
 JUMP = ReplayVerdict(ReplayOutcome.ACCEPT_FLAGGED, Rule.PACKET_JUMP, "amb-01", "PKT-009000", "jump of 8999")

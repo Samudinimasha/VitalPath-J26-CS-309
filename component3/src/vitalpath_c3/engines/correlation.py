@@ -21,7 +21,7 @@ from enum import Enum
 from importlib import resources
 from typing import Callable, Dict, Optional, Tuple
 
-from vitalpath_c3.models import VitalSigns
+from vitalpath_c3.packet_models import VitalSigns
 
 
 class Kind(str, Enum):

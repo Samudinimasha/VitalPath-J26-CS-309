@@ -10,7 +10,7 @@ from importlib import resources
 import pytest
 
 from vitalpath_c3.engines.threshold import Band, ThresholdEngine, ThresholdTable
-from vitalpath_c3.models import VitalSigns
+from vitalpath_c3.packet_models import VitalSigns
 
 
 @pytest.fixture(scope="module")

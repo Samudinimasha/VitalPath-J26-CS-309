@@ -1,7 +1,7 @@
 """Live receiver: runs every incoming UDP packet through the full Component 3 pipeline.
 
 Usage (from component3/):
-    PYTHONPATH=src python3 -m simulator.receiver [--port 5005] [--explain]
+    PYTHONPATH=src python3 -m simulator.hospital_receiver [--port 5005] [--explain]
 
 Each packet goes through rate limiting, replay detection, decryption,
 threshold and correlation checks and the hybrid decision. One line is printed
@@ -15,9 +15,9 @@ import socket
 from collections import Counter
 
 from simulator.demo_keys import demo_key
-from simulator.wire import DEFAULT_HOST, DEFAULT_PORT, decode
-from vitalpath_c3.crypto.payload import PayloadDecryptor
-from vitalpath_c3.pipeline import Pipeline
+from simulator.network_format import DEFAULT_HOST, DEFAULT_PORT, decode
+from vitalpath_c3.crypto.payload_encryption import PayloadDecryptor
+from vitalpath_c3.detection_pipeline import Pipeline
 
 COLOURS = {"ACCEPT": "\033[32m", "FLAG": "\033[33m", "DISCARD": "\033[31m"}
 RESET = "\033[0m"

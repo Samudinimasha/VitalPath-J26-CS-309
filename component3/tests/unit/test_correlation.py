@@ -5,7 +5,7 @@ import time
 import pytest
 
 from vitalpath_c3.engines.correlation import CorrelationEngine, Kind
-from vitalpath_c3.models import VitalSigns
+from vitalpath_c3.packet_models import VitalSigns
 
 NORMAL = dict(hr=75, pulse=74, spo2=98, sbp=120, dbp=78, resp=14)
 

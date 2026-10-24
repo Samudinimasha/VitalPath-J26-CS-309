@@ -22,7 +22,7 @@ from enum import Enum
 from importlib import resources
 from typing import Dict, List, Optional, Tuple
 
-from vitalpath_c3.models import VitalSigns
+from vitalpath_c3.packet_models import VitalSigns
 
 BORDERLINE_RULE = "R-{vital}-BORDERLINE"
 MISSING_RULE = "R-{vital}-MISSING"

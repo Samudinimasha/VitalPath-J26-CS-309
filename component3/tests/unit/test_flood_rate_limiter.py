@@ -2,8 +2,8 @@
 
 import pytest
 
-from vitalpath_c3.engines.rate_limiter import RateLimitConfig, RateLimiter
-from vitalpath_c3.rules import Rule
+from vitalpath_c3.engines.flood_rate_limiter import RateLimitConfig, RateLimiter
+from vitalpath_c3.rule_ids import Rule
 
 
 class FakeClock:

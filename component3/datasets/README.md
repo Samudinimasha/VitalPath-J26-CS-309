@@ -2,7 +2,7 @@
 
 Real, de-identified vital-sign numerics used as the legitimate ("normal")
 telemetry stream for the Component 3 simulator and evaluation. Converted from
-PhysioNet exports with `simulator/convert_xlsx.py`.
+PhysioNet exports with `simulator/physionet_xlsx_to_csv.py`.
 
 CSV columns: `t_s` (seconds from start), `hr`, `pulse`, `spo2`, `sbp`, `dbp`, `resp`.
 An empty cell means no reading at that time. Blood pressure is the

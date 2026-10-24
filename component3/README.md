@@ -16,22 +16,28 @@ header ──► Replay Detection (T9) ──DISCARD──► replay alert (payl
            Hybrid Decision (T12) ──► ACCEPT 'Normal' | FLAG 'Borderline' / 'Flagged'
 ```
 
-No machine learning: every verdict cites a named rule in `src/vitalpath_c3/rules.py`.
+No machine learning: every verdict cites a named rule in `src/vitalpath_c3/rule_ids.py`.
 
 ## Layout
 
 | Path | Purpose |
 |---|---|
-| `src/vitalpath_c3/config.py` | All tunable parameters |
-| `src/vitalpath_c3/models.py` | Packet / header data shapes |
-| `src/vitalpath_c3/rules.py` | Named rule IDs and descriptions |
-| `src/vitalpath_c3/engines/` | `replay.py` (T9), threshold (T10), correlation (T11), hybrid (T12) |
-| `src/vitalpath_c3/crypto/` | Payload decryption, sensitivity-label signing |
-| `src/vitalpath_c3/data/` | Clinical thresholds (D2), correlation rules (D3), PhysioNet loader |
-| `simulator/` | Synthetic stream and attack generation (replay, handover, injection, flooding) |
-| `tests/unit/` | Per-engine unit tests |
-| `tests/integration/` | Scenario S1–S12 tests on the full pipeline |
-| `benchmarks/` | Latency measurement against the 20 ms budget |
+| `src/vitalpath_c3/detection_pipeline.py` | Runs every stage in order for each packet |
+| `src/vitalpath_c3/engines/flood_rate_limiter.py` | Flood guard: at most 20 packets per second per device (S8) |
+| `src/vitalpath_c3/engines/replay.py` | Replay Detection Engine (T9) |
+| `src/vitalpath_c3/crypto/payload_encryption.py` | AES-256-GCM decryption (stand-in for Component 2) |
+| `src/vitalpath_c3/engines/threshold.py` | Threshold-Based Anomaly Detection Engine (T10) |
+| `src/vitalpath_c3/engines/correlation.py` | Multi-Vital Correlation Engine (T11) |
+| `src/vitalpath_c3/engines/hybrid.py` | Hybrid Decision Engine (T12) |
+| `src/vitalpath_c3/replay_configurations.py` | Replay Engine settings |
+| `src/vitalpath_c3/packet_models.py` | Packet header, vitals and encrypted packet shapes |
+| `src/vitalpath_c3/rule_ids.py` | Named rule IDs and their meanings |
+| `src/vitalpath_c3/data/` | `thresholds.json`, `correlation_rules.json`, `scoring.json`, `physionet_loader.py` |
+| `simulator/attack_demo.py` | Menu-driven attack demonstration |
+| `simulator/ambulance_sender.py`, `simulator/hospital_receiver.py` | Two-window live demo |
+| `simulator/network_format.py`, `simulator/demo_keys.py` | Demo packet format and demo-only keys |
+| `simulator/physionet_xlsx_to_csv.py` | Converts PhysioNet Excel exports to CSV |
+| `tests/unit/`, `tests/integration/` | Per-engine tests; scenarios S1–S12 through the full pipeline |
 
 ## Replay Detection Engine (T9)
 
@@ -73,11 +79,11 @@ PhysioNet recording (encrypted) and, with `--attacks`, injects replays, a handov
 forged and tampered packets, and a flood.
 
 ```bash
-PYTHONPATH=src python3 -m simulator.receiver --explain
+PYTHONPATH=src python3 -m simulator.hospital_receiver --explain
 ```
 
 ```bash
-PYTHONPATH=src python3 -m simulator.sender --attacks --start 60
+PYTHONPATH=src python3 -m simulator.ambulance_sender --attacks --start 60
 ```
 
 `--start 60` skips the first minute of bidmc53n, where the patient's respiratory rate is high and

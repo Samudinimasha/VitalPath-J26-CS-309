@@ -1,10 +1,10 @@
 """Live sender: an ambulance streaming real, encrypted vitals over UDP, plus an attacker.
 
 Usage (from component3/):
-    PYTHONPATH=src python3 -m simulator.sender                  # legitimate stream only
-    PYTHONPATH=src python3 -m simulator.sender --attacks        # stream + scripted attacks
-    PYTHONPATH=src python3 -m simulator.sender --data datasets/mimic3wdb_3000003n.csv --rate 10
-    PYTHONPATH=src python3 -m simulator.sender --attacks --start 60   # skip bidmc53n's early tachypnoea
+    PYTHONPATH=src python3 -m simulator.ambulance_sender                  # legitimate stream only
+    PYTHONPATH=src python3 -m simulator.ambulance_sender --attacks        # stream + scripted attacks
+    PYTHONPATH=src python3 -m simulator.ambulance_sender --data datasets/mimic3wdb_3000003n.csv --rate 10
+    PYTHONPATH=src python3 -m simulator.ambulance_sender --attacks --start 60   # skip bidmc53n's early tachypnoea
 
 Vitals come from a PhysioNet recording (default: bidmc_53n, 1 Hz) and are
 sealed with the AES-GCM stand-in for Component 2. With --attacks, after every
@@ -33,10 +33,10 @@ import socket
 import time
 
 from simulator.demo_keys import demo_key
-from simulator.wire import DEFAULT_HOST, DEFAULT_PORT, encode, packet_id
-from vitalpath_c3.crypto.payload import seal
-from vitalpath_c3.data.loaders import load_vitals_csv
-from vitalpath_c3.models import PacketHeader, VitalSigns
+from simulator.network_format import DEFAULT_HOST, DEFAULT_PORT, encode, packet_id
+from vitalpath_c3.crypto.payload_encryption import seal
+from vitalpath_c3.data.physionet_loader import load_vitals_csv
+from vitalpath_c3.packet_models import PacketHeader, VitalSigns
 
 ATTACKS = ["replay", "handover", "reorder", "spike", "jump", "probe-off",
            "tamper", "stale", "future", "malformed", "flood"]

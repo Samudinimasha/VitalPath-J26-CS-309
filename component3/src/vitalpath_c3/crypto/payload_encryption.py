@@ -30,8 +30,8 @@ from typing import Callable
 from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from vitalpath_c3.models import EncryptedPacket, PacketHeader, VitalSigns
-from vitalpath_c3.rules import Rule
+from vitalpath_c3.packet_models import EncryptedPacket, PacketHeader, VitalSigns
+from vitalpath_c3.rule_ids import Rule
 
 NONCE_BYTES = 12
 _VITAL_FIELDS = {f.name for f in fields(VitalSigns)}

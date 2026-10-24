@@ -12,11 +12,11 @@ import time
 import pytest
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from vitalpath_c3.crypto.payload import PayloadDecryptor, seal
-from vitalpath_c3.engines.rate_limiter import RateLimiter
+from vitalpath_c3.crypto.payload_encryption import PayloadDecryptor, seal
+from vitalpath_c3.engines.flood_rate_limiter import RateLimiter
 from vitalpath_c3.engines.replay import ReplayDetectionEngine
-from vitalpath_c3.models import EncryptedPacket, PacketHeader, VitalSigns
-from vitalpath_c3.pipeline import Pipeline
+from vitalpath_c3.packet_models import EncryptedPacket, PacketHeader, VitalSigns
+from vitalpath_c3.detection_pipeline import Pipeline
 
 T0 = 1_800_000_000.0
 KEY = AESGCM.generate_key(bit_length=256)

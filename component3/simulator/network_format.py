@@ -7,7 +7,7 @@ is never inspected by the replay gate.
 
 import json
 
-from vitalpath_c3.models import EncryptedPacket, PacketHeader
+from vitalpath_c3.packet_models import EncryptedPacket, PacketHeader
 
 DEFAULT_HOST = "127.0.0.1"
 DEFAULT_PORT = 5005

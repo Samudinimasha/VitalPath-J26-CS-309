@@ -19,15 +19,15 @@ import re
 import time
 
 from simulator.demo_keys import demo_key
-from simulator.sender import endless_vitals
-from simulator.wire import packet_id
-from vitalpath_c3.crypto.payload import PayloadDecryptor, seal
+from simulator.ambulance_sender import endless_vitals
+from simulator.network_format import packet_id
+from vitalpath_c3.crypto.payload_encryption import PayloadDecryptor, seal
 from vitalpath_c3.engines.correlation import Kind
-from vitalpath_c3.engines.rate_limiter import RateLimiter
+from vitalpath_c3.engines.flood_rate_limiter import RateLimiter
 from vitalpath_c3.engines.replay import ReplayDetectionEngine, ReplayOutcome
 from vitalpath_c3.engines.threshold import Band
-from vitalpath_c3.models import EncryptedPacket, PacketHeader, VitalSigns
-from vitalpath_c3.pipeline import Pipeline
+from vitalpath_c3.packet_models import EncryptedPacket, PacketHeader, VitalSigns
+from vitalpath_c3.detection_pipeline import Pipeline
 
 DEVICE = "MON-01"  # the ambulance's patient monitor
 CASE = "CASE001"  # emergency case from (simulated) dispatch

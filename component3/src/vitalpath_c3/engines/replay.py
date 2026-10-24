@@ -34,9 +34,9 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Callable, Dict, Optional
 
-from vitalpath_c3.config import ReplayConfig
-from vitalpath_c3.models import PACKET_NUMBER_MAX, PacketHeader
-from vitalpath_c3.rules import Rule
+from vitalpath_c3.replay_configurations import ReplayConfig
+from vitalpath_c3.packet_models import PACKET_NUMBER_MAX, PacketHeader
+from vitalpath_c3.rule_ids import Rule
 
 logger = logging.getLogger(__name__)
 
