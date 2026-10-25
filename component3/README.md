@@ -78,6 +78,17 @@ score and rules, and buttons to inject attacks and sensor faults; click a packet
 each stage handled it. The **Handover incident** tab shows the most recent 5G handover replay
 on a timeline. Stop the server with Ctrl+C. Demo keys only.
 
+To show the stream from the terminal sender instead, start the website in listen mode, then
+the sender in a second terminal (stop `simulator.hospital_receiver` first; both use UDP 5005):
+
+```bash
+PYTHONPATH=src python3 -m dashboard.server --listen
+PYTHONPATH=src python3 -m simulator.ambulance_sender --attacks --start 60
+```
+
+In listen mode the attack buttons are hidden (the sender injects the attacks) and a pause of
+2 s or more in the stream is shown as a handover on the Handover incident tab.
+
 ## Attack demonstration
 
 One window, menu-driven: choose an attack or sensor fault and watch each engine handle it, step by step.

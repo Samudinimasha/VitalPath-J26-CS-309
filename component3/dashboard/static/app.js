@@ -179,7 +179,16 @@
   }
 
   // ---------------------------------------------------------------- buttons
-  function renderButtons(attacks) {
+  function renderButtons(attacks, source) {
+    if (!Object.keys(attacks).length) {
+      document.querySelectorAll(".side-col .sub").forEach((el) => (el.hidden = true));
+      $("attack-buttons").innerHTML =
+        `<p class="sub-note" style="margin:0">Listening to the ambulance sender on <b>${esc(source)}</b>. ` +
+        `Attacks come from the sender: start it with <code>--attacks</code> in another terminal. ` +
+        `A pause of 2 s or more appears as a handover on the Handover incident tab.</p>`;
+      $("clinical-buttons").innerHTML = "";
+      return;
+    }
     const make = (names, cls) => names.map((n) =>
       `<button class="btn ${cls}" data-attack="${esc(n)}">${esc(attacks[n])}</button>`).join("");
     const names = Object.keys(attacks);
@@ -318,7 +327,8 @@
   function refreshState() {
     return fetch("/api/state").then((r) => r.json()).then((s) => {
       state.stats = s.stats; state.incident = s.incident; state.settings = s.settings;
-      $("context").textContent = `${s.unit} · ${s.case} · ${s.device}`;
+      $("context").textContent = s.source === "simulated"
+        ? `${s.unit} · ${s.case} · ${s.device}` : `${s.case} · ${s.device} · live from ${s.source}`;
       renderStats();
       if (!$("view-incident").hidden) renderIncident();
       return s;
@@ -327,7 +337,7 @@
 
   refreshState().then((s) => {
     state.events = s.events;
-    renderButtons(s.attacks);
+    renderButtons(s.attacks, s.source);
     schedule();
     const source = new EventSource("/api/stream");
     source.onopen = () => setStatus(true);

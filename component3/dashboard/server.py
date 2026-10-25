@@ -3,6 +3,13 @@
 Usage (from component3/):
     PYTHONPATH=src python3 -m dashboard.server            # then open http://localhost:8000
     PYTHONPATH=src python3 -m dashboard.server --rate 2   # two packets per second
+    PYTHONPATH=src python3 -m dashboard.server --listen   # show packets from ambulance_sender
+
+With --listen the website makes no packets of its own: it receives what
+simulator.ambulance_sender sends over UDP (port 5005), exactly like
+simulator.hospital_receiver, and shows each result. Attacks then come from
+the sender (--attacks); a pause of 2 s or more in the stream is shown as a
+handover on the Handover incident tab.
 
 A simulated ambulance (patient monitor MON-01, case CASE001) streams a real
 PhysioNet recording through the real Component 3 pipeline. Attack buttons on
@@ -19,6 +26,7 @@ import json
 import logging
 import os
 import queue
+import socket
 import threading
 import time
 from collections import Counter, deque
@@ -28,7 +36,7 @@ from pathlib import Path
 from simulator.ambulance_sender import endless_vitals
 from simulator.attack_demo import WHY_DISCARDED
 from simulator.demo_keys import demo_key
-from simulator.network_format import packet_id
+from simulator.network_format import DEFAULT_PORT, decode, packet_id
 from vitalpath_c3.crypto.payload_encryption import PayloadDecryptor, seal
 from vitalpath_c3.detection_pipeline import Pipeline
 from vitalpath_c3.engines.correlation import Kind
@@ -119,6 +127,7 @@ class DemoStream:
         self.paused_until = 0.0
         self.incident = None  # most recent handover, for the incident view
         self.stopping = False
+        self.source = "simulated"  # or "udp://host:port" in listen mode
 
     # --- packets -------------------------------------------------------------
 
@@ -132,7 +141,14 @@ class DemoStream:
         return packet
 
     def process(self, packet, injected=None):
+        """Run one packet through the pipeline. ``injected`` labels what was
+        done to it; it may be a function of the result (used in listen mode)."""
         result = self.pipeline.process(packet)
+        # Decide before tagging: a tag function may close the incident, and the
+        # packet that closes it still belongs to it.
+        incident = self.incident if self.incident is not None and self.incident["open"] else None
+        if callable(injected):
+            injected = injected(result)
         rec = result.summary
         replay = None if result.replay is None else ("accepted" if result.replay.passed else "dropped")
         vitals = None if result.vitals is None else {
@@ -172,8 +188,8 @@ class DemoStream:
             if rec.decision == "DISCARD" and not result.decrypted:
                 self.stats["discarded_unopened"] += 1
             self.latencies.append(result.latency_ms)
-            if self.incident is not None and self.incident["open"]:
-                self.incident["events"].append(event)
+            if incident is not None:
+                incident["events"].append(event)
             subscribers = list(self.subscribers)
         for q in subscribers:
             q.put(event)
@@ -241,6 +257,36 @@ class DemoStream:
             if next_tick < time.time():
                 next_tick = time.time() + self.interval
 
+    # --- listen mode ---------------------------------------------------------
+
+    HANDOVER_GAP_S = 2.0
+
+    def listen(self, sock):
+        """Process packets arriving from simulator.ambulance_sender over UDP."""
+        last_t = None
+        while not self.stopping:
+            datagram, _ = sock.recvfrom(65535)
+            now = time.time()
+            if last_t is not None and now - last_t >= self.HANDOVER_GAP_S:
+                # The stream paused: the sender's 5G handover (link down).
+                self.incident = {"start": last_t, "end": now, "open": True,
+                                 "gap_s": round(now - last_t, 1), "events": []}
+            injected = None
+            incident = self.incident
+            if incident is not None and incident["open"]:
+
+                def injected(result, incident=incident):
+                    seen = {e["injected"] for e in incident["events"]}
+                    if result.summary.decision == "DISCARD" and "handover" not in seen:
+                        return "handover"
+                    if result.replay is not None and result.replay.passed:
+                        incident["open"] = False  # the real stream has resumed
+                        return "handover-next"
+                    return None
+
+            self.process(decode(datagram), injected)
+            last_t = now
+
     def snapshot(self):
         with self.lock:
             lat = sorted(self.latencies)
@@ -251,7 +297,8 @@ class DemoStream:
                 incident["events"] = list(self.incident["events"])
             return {
                 "device": DEVICE, "case": CASE, "unit": UNIT,
-                "attacks": ATTACKS,
+                "attacks": ATTACKS if self.source == "simulated" else {},
+                "source": self.source,
                 "events": list(self.events),
                 "stats": {
                     "packets": self.stats["packets"],
@@ -337,11 +384,26 @@ def main():
     parser.add_argument("--rate", type=float, default=1.0, help="genuine packets per second")
     parser.add_argument("--data", default="datasets/bidmc_53n.csv")
     parser.add_argument("--start", type=int, default=60, help="row of the recording to start from")
+    parser.add_argument("--listen", action="store_true",
+                        help="show packets from simulator.ambulance_sender instead of a built-in stream")
+    parser.add_argument("--udp-port", type=int, default=DEFAULT_PORT, help="UDP port to listen on with --listen")
     args = parser.parse_args()
 
     logging.getLogger("vitalpath_c3").setLevel(logging.ERROR)
     stream = DemoStream(args.data, args.start, args.rate)
-    threading.Thread(target=stream.run, daemon=True).start()
+    if args.listen:
+        udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            udp.bind(("127.0.0.1", args.udp_port))
+        except OSError as exc:
+            raise SystemExit(
+                f"Cannot listen on udp://127.0.0.1:{args.udp_port}: {exc.strerror}.\n"
+                "simulator.hospital_receiver is probably running: stop it with Ctrl+C first."
+            )
+        stream.source = f"udp://127.0.0.1:{args.udp_port}"
+        threading.Thread(target=stream.listen, args=(udp,), daemon=True).start()
+    else:
+        threading.Thread(target=stream.run, daemon=True).start()
     try:
         server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(stream))
     except OSError as exc:
@@ -353,6 +415,9 @@ def main():
         )
     server.daemon_threads = True
     print(f"Component 3 demonstration website: http://localhost:{args.port}  (Ctrl+C to stop)")
+    if args.listen:
+        print(f"Listening for the ambulance sender on {stream.source}. In another terminal run:\n"
+              "  PYTHONPATH=src python3 -m simulator.ambulance_sender --attacks --start 60")
     try:
         server.serve_forever()
     except KeyboardInterrupt:

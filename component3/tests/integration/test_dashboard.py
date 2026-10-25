@@ -115,3 +115,46 @@ def test_static_files_cannot_escape_their_folder(server):
     with pytest.raises(urllib.error.HTTPError) as err:
         get(base + "/static/../server.py")
     assert err.value.code == 404
+
+
+def test_listen_mode_processes_sender_packets_and_spots_handover():
+    """--listen: packets arrive over UDP from the ambulance sender; a pause in
+    the stream followed by a replay is recorded as a handover incident."""
+    import socket
+    import time
+
+    from simulator.demo_keys import demo_key
+    from simulator.network_format import encode
+    from vitalpath_c3.crypto.payload_encryption import seal
+    from vitalpath_c3.packet_models import PacketHeader, VitalSigns
+
+    s = DemoStream("datasets/bidmc_53n.csv", 60, rate=1.0)
+    s.HANDOVER_GAP_S = 0.3
+    s.source = "udp://test"
+    rx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    rx.bind(("127.0.0.1", 0))
+    threading.Thread(target=s.listen, args=(rx,), daemon=True).start()
+    tx = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    key = demo_key("MON-01")
+
+    def datagram(n, ts=None):
+        header = PacketHeader("MON-01", f"PKT-{n:06d}", ts or time.time(), "CASE001")
+        packet = seal(header, VitalSigns(hr=80, spo2=98, resp=16), key)
+        return encode(header.device_id, header.packet_id, header.timestamp, packet.payload, header.case_id)
+
+    for n in (1, 2, 3):
+        tx.sendto(datagram(n), rx.getsockname())
+        time.sleep(0.05)
+    time.sleep(0.4)  # link down
+    tx.sendto(datagram(2), rx.getsockname())  # replayed packet ID with a fresh timestamp
+    time.sleep(0.05)
+    tx.sendto(datagram(4), rx.getsockname())
+    deadline = time.time() + 3
+    while len(s.events) < 5 and time.time() < deadline:
+        time.sleep(0.02)
+    s.stopping = True
+    tx.close()
+
+    assert s.snapshot()["attacks"] == {}
+    tagged = [(e["packet_id"], e["injected"], e["decision"]) for e in s.incident["events"]]
+    assert tagged == [("PKT-000002", "handover", "DISCARD"), ("PKT-000004", "handover-next", "ACCEPT")]
