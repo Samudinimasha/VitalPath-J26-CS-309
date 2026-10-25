@@ -342,7 +342,15 @@ def main():
     logging.getLogger("vitalpath_c3").setLevel(logging.ERROR)
     stream = DemoStream(args.data, args.start, args.rate)
     threading.Thread(target=stream.run, daemon=True).start()
-    server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(stream))
+    try:
+        server = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(stream))
+    except OSError as exc:
+        raise SystemExit(
+            f"Cannot start the website on port {args.port}: {exc.strerror}.\n"
+            "It is probably already running in another terminal: open http://localhost:"
+            f"{args.port} in your browser, or stop the other copy with Ctrl+C. "
+            "To run a second copy, add --port 8001."
+        )
     server.daemon_threads = True
     print(f"Component 3 demonstration website: http://localhost:{args.port}  (Ctrl+C to stop)")
     try:
