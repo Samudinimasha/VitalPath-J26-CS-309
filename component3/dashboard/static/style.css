@@ -85,6 +85,9 @@ tr.r-discard { background: var(--red-soft); }
 tr.r-discard:hover { background: #f6dfdb; }
 tr.fresh td { animation: flash 1.2s ease-out; }
 @keyframes flash { from { background: #fff7cf; } to { background: transparent; } }
+tbody tr:has(+ tr.sub) td { border-bottom: 0; padding-bottom: 2px; }
+tr.sub td { padding-top: 0; padding-bottom: 9px; font-size: .78rem; color: var(--muted); white-space: normal; }
+tr.sub .pts { color: var(--ink); opacity: .75; padding-top: 2px; }
 .d-ACCEPT { color: var(--green); font-weight: 600; }
 .d-FLAG { color: var(--amber); font-weight: 600; }
 .d-DISCARD { color: var(--red); font-weight: 600; }

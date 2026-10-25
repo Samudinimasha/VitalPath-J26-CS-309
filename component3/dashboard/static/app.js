@@ -122,7 +122,33 @@
     return `<tr class="${cls}" data-id="${e.id}"><td>${clock(e.t)}</td><td>${esc(e.packet_id)}</td>` +
       `<td class="rp-${esc(e.replay || "")}">${esc(e.replay || "—")}</td>` +
       `<td class="d-${esc(e.decision)}">${esc(e.decision)}${e.label ? " · " + esc(e.label) : ""}</td>` +
-      `<td>${e.score == null ? "" : e.score}</td><td class="reason">${reason}${detail}</td><td>${inj}</td></tr>`;
+      `<td>${e.score == null ? "" : e.score}</td><td class="reason">${reason}${detail}</td><td>${inj}</td></tr>` +
+      subRowHtml(e, cls);
+  }
+
+  // Lines under each packet, like the terminal receiver: what decryption read,
+  // then the points behind a flag.
+  function subRowHtml(e, cls) {
+    let read;
+    if (e.vitals) {
+      read = `decrypted and read: ${esc(vitalsLine(e.vitals))}`;
+    } else if (e.decrypted === false && e.decision === "DISCARD" && e.replay === "accepted") {
+      read = "decryption failed: seal broken, contents not trusted";
+    } else {
+      read = "not decrypted: stopped before anyone looked inside";
+    }
+    const pts = (e.points || []).map((p) => `<div class="pts">+${p.points}&nbsp; ${esc(p.rule)}: ${esc(p.reason)}</div>`).join("");
+    return `<tr class="sub ${cls}" data-id="${e.id}"><td></td><td colspan="6"><div class="read">${read}</div>${pts}</td></tr>`;
+  }
+
+  function vitalsLine(v) {
+    const parts = [];
+    if (v.hr != null) parts.push(`HR ${fmt(v.hr)}`);
+    if (v.pulse != null) parts.push(`pulse ${fmt(v.pulse)}`);
+    if (v.spo2 != null) parts.push(`SpO2 ${fmt(v.spo2)}%`);
+    if (v.sbp != null && v.dbp != null) parts.push(`BP ${fmt(v.sbp)}/${fmt(v.dbp)}`);
+    if (v.resp != null) parts.push(`RESP ${fmt(v.resp)}`);
+    return parts.join(" · ");
   }
 
   function renderRows(freshIds) {
