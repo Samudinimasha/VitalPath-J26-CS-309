@@ -33,6 +33,7 @@ No machine learning: every verdict cites a named rule in `src/vitalpath_c3/rule_
 | `src/vitalpath_c3/packet_models.py` | Packet header, vitals and encrypted packet shapes |
 | `src/vitalpath_c3/rule_ids.py` | Named rule IDs and their meanings |
 | `src/vitalpath_c3/data/` | `thresholds.json`, `correlation_rules.json`, `scoring.json`, `physionet_loader.py` |
+| `dashboard/` | Demonstration website (`server.py` + `static/` page) |
 | `simulator/attack_demo.py` | Menu-driven attack demonstration |
 | `simulator/ambulance_sender.py`, `simulator/hospital_receiver.py` | Two-window live demo |
 | `simulator/network_format.py`, `simulator/demo_keys.py` | Demo packet format and demo-only keys |
@@ -61,6 +62,21 @@ python3 -m pytest
 ```
 
 `tests/integration/test_scenarios.py` runs detection scenarios S1-S12 (proposal Table 6) through the full pipeline.
+
+## Demonstration website
+
+Runs on your laptop at http://localhost:8000 using the real engines; no internet needed.
+
+```bash
+PYTHONPATH=src python3 -m dashboard.server
+```
+
+Then open http://localhost:8000. A simulated ambulance (MON-01, CASE001) streams the
+bidmc53n recording through the pipeline once a second. The **Live detection** tab shows the
+latest decrypted vitals, a heart-rate trace, every packet with its replay result, decision,
+score and rules, and buttons to inject attacks and sensor faults; click a packet to see how
+each stage handled it. The **Handover incident** tab shows the most recent 5G handover replay
+on a timeline. Stop the server with Ctrl+C. Demo keys only.
 
 ## Attack demonstration
 

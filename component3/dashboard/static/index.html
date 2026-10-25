@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>C3 · Anomaly &amp; Replay Detection</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="top">
+  <div class="top-left">
+    <h1>C3 · Anomaly &amp; Replay Detection</h1>
+    <span class="pill" id="status"><span class="dot"></span><span id="status-text">CONNECTING</span></span>
+  </div>
+  <div class="top-right mono" id="context">AMB-07 · CASE001 · MON-01</div>
+</header>
+
+<nav class="tabs" role="tablist">
+  <button class="tab active" data-view="live" role="tab" aria-selected="true">Live detection</button>
+  <button class="tab" data-view="incident" role="tab" aria-selected="false">Handover incident</button>
+</nav>
+
+<main id="view-live" class="view">
+  <section class="main-col">
+    <div class="vitals" id="vitals"></div>
+    <p class="note mono">Latest decrypted reading (demo view). Values are only read after a packet passes the replay check and its seal is verified.</p>
+
+    <div class="card">
+      <div class="card-head">
+        <h2>Live trace</h2>
+        <span class="mono muted">heart rate · last 60 packets</span>
+      </div>
+      <canvas id="trace" height="150"></canvas>
+      <div class="legend mono">
+        <span><i class="sw sw-line"></i>heart rate</span>
+        <span><i class="sw sw-amber"></i>flagged</span>
+        <span><i class="sw sw-red"></i>discarded packet</span>
+      </div>
+    </div>
+
+    <div class="card table-card">
+      <div class="card-head">
+        <h2>Packets</h2>
+        <div class="chips" id="filters">
+          <button class="chip active" data-f="all">All</button>
+          <button class="chip" data-f="discard">Discarded</button>
+          <button class="chip" data-f="flag">Flagged</button>
+          <button class="chip" data-f="replay">Replay</button>
+          <button class="chip" data-f="range">Range</button>
+          <button class="chip" data-f="corr">Correlation</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>Time</th><th>Packet</th><th>Replay</th><th>Decision</th><th>Score</th><th>Reason</th><th>Injected</th></tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+      <p class="hint mono">Click a packet to see how each stage handled it.</p>
+    </div>
+  </section>
+
+  <aside class="side-col">
+    <div class="card alert" id="alert">
+      <h3 id="alert-title">WAITING FOR PACKETS</h3>
+      <p id="alert-text">The ambulance stream starts automatically.</p>
+      <div class="mono alert-meta" id="alert-meta"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h2>Simulate</h2><span class="mono muted" id="busy"></span></div>
+      <p class="sub mono">ATTACKS</p>
+      <div class="buttons" id="attack-buttons"></div>
+      <p class="sub mono">SENSOR / CLINICAL</p>
+      <div class="buttons" id="clinical-buttons"></div>
+    </div>
+
+    <div class="card">
+      <h2>Engine performance</h2>
+      <dl class="stats" id="stats"></dl>
+    </div>
+
+    <div class="card">
+      <h2>Detection settings</h2>
+      <dl class="stats" id="settings"></dl>
+      <p class="sub-note">Demo keys only. Real keys will come from Component 2.</p>
+    </div>
+  </aside>
+</main>
+
+<main id="view-incident" class="view" hidden>
+  <section class="incident">
+    <div class="card">
+      <div class="card-head">
+        <h2 id="inc-title">Packet timeline</h2>
+        <span class="mono muted" id="inc-range"></span>
+      </div>
+      <div id="timeline"></div>
+      <div class="legend mono" id="inc-legend"></div>
+    </div>
+    <div class="incident-grid">
+      <div class="card"><h2>Incident summary</h2><dl class="kv mono" id="inc-summary"></dl><div id="inc-note"></div></div>
+      <div class="card"><h2>Rejected packet detail</h2><dl class="kv mono" id="inc-rejected"></dl><div id="inc-rejected-note"></div></div>
+      <div class="card"><h2>After reconnection</h2><dl class="kv mono" id="inc-after"></dl><div id="inc-after-note"></div></div>
+    </div>
+  </section>
+</main>
+
+<div class="drawer" id="drawer" hidden>
+  <div class="drawer-panel" role="dialog" aria-modal="true" aria-labelledby="d-title">
+    <div class="card-head">
+      <h2 id="d-title">Packet</h2>
+      <button class="close" id="d-close" aria-label="Close">×</button>
+    </div>
+    <div id="d-body"></div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
