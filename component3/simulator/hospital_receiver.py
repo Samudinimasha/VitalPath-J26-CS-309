@@ -1,11 +1,12 @@
 """Live receiver: runs every incoming UDP packet through the full Component 3 pipeline.
 
 Usage (from component3/):
-    PYTHONPATH=src python3 -m simulator.hospital_receiver [--port 5005] [--explain]
+    PYTHONPATH=src python3 -m simulator.hospital_receiver [--port 5005] [--explain] [--vitals]
 
 Each packet goes through rate limiting, replay detection, decryption,
 threshold and correlation checks and the hybrid decision. One line is printed
-per packet; --explain also prints the scoring lines behind every FLAG.
+per packet; --explain also prints the scoring lines behind every FLAG, and
+--vitals shows what decryption read from each packet (or that it was never opened).
 Press Ctrl+C to stop and print a summary.
 """
 
@@ -14,6 +15,7 @@ import logging
 import socket
 from collections import Counter
 
+from simulator.attack_demo import show_vitals
 from simulator.demo_keys import demo_key
 from simulator.network_format import DEFAULT_HOST, DEFAULT_PORT, decode
 from vitalpath_c3.crypto.payload_encryption import PayloadDecryptor
@@ -29,6 +31,7 @@ def main() -> None:
     parser.add_argument("--host", default=DEFAULT_HOST)
     parser.add_argument("--port", type=int, default=DEFAULT_PORT)
     parser.add_argument("--explain", action="store_true", help="print the scoring behind each FLAG")
+    parser.add_argument("--vitals", action="store_true", help="show the vitals decryption read from each packet")
     args = parser.parse_args()
 
     # The verdict lines below already show every discard; keep engine logs quiet.
@@ -80,6 +83,14 @@ def main() -> None:
                 f"{replay} {COLOURS[rec.decision]}{rec.decision:<8} {rec.label or '':<10}{RESET} "
                 f"{'' if rec.score is None else rec.score:>5}  {result.latency_ms:>6.2f}ms  {reason}"
             )
+            if args.vitals:
+                if result.vitals is not None:
+                    opened = f"decrypted and read: {show_vitals(result.vitals)}"
+                elif result.decrypted:
+                    opened = "decryption failed: seal broken, contents not trusted"
+                else:
+                    opened = "not decrypted: stopped before anyone looked inside"
+                print(f"{DIM}{'':>37}{opened}{RESET}")
             if args.explain and rec.decision == "FLAG":
                 for line in result.explain().splitlines()[1:]:
                     print(f"{DIM}{'':>63}{line.strip()}{RESET}")

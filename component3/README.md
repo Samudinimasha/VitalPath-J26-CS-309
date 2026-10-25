@@ -91,7 +91,7 @@ PhysioNet recording (encrypted) and, with `--attacks`, injects replays, a handov
 forged and tampered packets, and a flood.
 
 ```bash
-PYTHONPATH=src python3 -m simulator.hospital_receiver --explain
+PYTHONPATH=src python3 -m simulator.hospital_receiver --explain --vitals
 ```
 
 ```bash
