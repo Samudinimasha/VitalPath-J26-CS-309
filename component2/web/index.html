@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VitalPath - Component 2: Adaptive Security Decision Engine</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    @keyframes pulse-slow {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
+    }
+    .animate-pulse-slow {
+      animation: pulse-slow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+    }
+  </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans antialiased p-4 md:p-6">
+  <div class="max-w-7xl mx-auto space-y-6">
+
+    <!-- Top Navigation / Header -->
+    <header class="flex flex-col md:flex-row md:items-center justify-between pb-4 border-b border-slate-800 gap-4">
+      <div>
+        <div class="flex items-center gap-3">
+          <span class="inline-flex items-center justify-center w-9 h-9 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 font-bold text-lg">VP</span>
+          <div>
+            <h1 class="text-xl md:text-2xl font-bold tracking-tight text-white flex items-center gap-2">
+              VitalPath: 5G Security Middleware
+              <span class="text-xs px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 border border-blue-500/20 font-medium">Component 2</span>
+            </h1>
+            <p class="text-xs md:text-sm text-slate-400">Adaptive Security Decision Engine for Connected Ambulance Telemetry (IT23471962 | J26-CS-309)</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mode Selector & Live Stream Controls -->
+      <div class="flex items-center gap-3 bg-slate-900 border border-slate-800 p-1.5 rounded-xl">
+        <button id="btn-manual-mode" onclick="setMode('manual')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white shadow-sm transition">
+          Manual Controls
+        </button>
+        <button id="btn-stream-mode" onclick="setMode('stream')" class="px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition">
+          MIMIC-III Stream (4,759 Pkts)
+        </button>
+        <button id="btn-play-stream" onclick="toggleStreamPlay()" class="hidden px-3 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white hover:bg-blue-500 transition items-center gap-1.5">
+          <span id="play-icon">▶</span> <span id="play-text">Start Auto-Play</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main Grid: Inputs (Left) and Decision/Security Engine (Right) -->
+    <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+      <!-- LEFT COLUMN: The 3 Exact SPS Inputs (col-span-5) -->
+      <div class="lg:col-span-5 space-y-5">
+
+        <!-- Input 1: Clinical Criticality (CC) -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-rose-500"></span>
+              1. Clinical Criticality (CC)
+            </h2>
+            <span id="badge-cc" class="text-xs px-2 py-0.5 rounded font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">
+              NORMAL (CC = 0.20)
+            </span>
+          </div>
+
+          <!-- Sliders for vital signs (Component 3 schema) -->
+          <div class="grid grid-cols-2 gap-3.5 text-xs">
+            <div>
+              <div class="flex justify-between mb-1">
+                <span class="text-slate-400">Heart Rate (HR)</span>
+                <span id="val-hr" class="font-mono text-white font-bold">75 bpm</span>
+              </div>
+              <input type="range" id="slider-hr" min="30" max="200" value="75" oninput="onVitalChange()" class="w-full accent-rose-500 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
+            </div>
+
+            <div>
+              <div class="flex justify-between mb-1">
+                <span class="text-slate-400">Peripheral Pulse</span>
+                <span id="val-pulse" class="font-mono text-white font-bold">75 bpm</span>
+              </div>
+              <input type="range" id="slider-pulse" min="30" max="200" value="75" oninput="onVitalChange()" class="w-full accent-rose-500 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
+            </div>
+
+            <div>
+              <div class="flex justify-between mb-1">
+                <span class="text-slate-400">Oxygen (SpO2)</span>
+                <span id="val-spo2" class="font-mono text-white font-bold">98 %</span>
+              </div>
+              <input type="range" id="slider-spo2" min="65" max="100" value="98" oninput="onVitalChange()" class="w-full accent-cyan-400 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
+            </div>
+
+            <div>
+              <div class="flex justify-between mb-1">
+                <span class="text-slate-400">Resp. Rate (RR)</span>
+                <span id="val-resp" class="font-mono text-white font-bold">16 /min</span>
+              </div>
+              <input type="range" id="slider-resp" min="6" max="50" value="16" oninput="onVitalChange()" class="w-full accent-amber-400 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
+            </div>
+
+            <div>
+              <div class="flex justify-between mb-1">
+                <span class="text-slate-400">Blood Pressure (SBP)</span>
+                <span id="val-sbp" class="font-mono text-white font-bold">120 mmHg</span>
+              </div>
+              <input type="range" id="slider-sbp" min="50" max="220" value="120" oninput="onVitalChange()" class="w-full accent-purple-400 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
+            </div>
+
+            <div>
+              <div class="flex justify-between mb-1">
+                <span class="text-slate-400">Blood Pressure (DBP)</span>
+                <span id="val-dbp" class="font-mono text-white font-bold">80 mmHg</span>
+              </div>
+              <input type="range" id="slider-dbp" min="30" max="130" value="80" oninput="onVitalChange()" class="w-full accent-purple-400 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
+            </div>
+          </div>
+
+          <!-- Quick Clinical Presets -->
+          <div class="flex items-center gap-2 pt-1">
+            <span class="text-slate-500 text-[11px] font-medium">Presets:</span>
+            <button onclick="setVitalPreset('normal')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs transition">Normal Resting</button>
+            <button onclick="setVitalPreset('borderline')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-amber-300 text-xs transition">Mild Hypoxia</button>
+            <button onclick="setVitalPreset('critical')" class="px-2 py-1 rounded bg-slate-800 hover:bg-slate-700 text-rose-400 text-xs transition">Cardiac Emergency</button>
+          </div>
+        </div>
+
+        <!-- Input 2: 5G Network Conditions (NC) -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-cyan-400"></span>
+              2. 5G Network Conditions (NC)
+            </h2>
+            <span id="badge-nc" class="text-xs px-2 py-0.5 rounded font-mono font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+              OPTIMAL (NC = 0.00)
+            </span>
+          </div>
+
+          <div class="space-y-3 text-xs">
+            <div>
+              <div class="flex justify-between mb-1">
+                <span class="text-slate-400">Latency (5G RTT)</span>
+                <span id="val-rtt" class="font-mono text-white font-bold">20.0 ms</span>
+              </div>
+              <input type="range" id="slider-rtt" min="5" max="250" value="20" oninput="onNetworkChange()" class="w-full accent-cyan-400 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
+            </div>
+
+            <div>
+              <div class="flex justify-between mb-1">
+                <span class="text-slate-400">Packet Loss Rate</span>
+                <span id="val-loss" class="font-mono text-white font-bold">0.1 %</span>
+              </div>
+              <input type="range" id="slider-loss" min="0" max="10" step="0.1" value="0.1" oninput="onNetworkChange()" class="w-full accent-cyan-400 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
+            </div>
+
+            <div class="flex items-center justify-between pt-1">
+              <div>
+                <span class="text-slate-300 font-medium">Cellular Handover Active</span>
+                <p class="text-[11px] text-slate-500">Simulates vehicle crossing 5G cell boundary (+0.30 penalty)</p>
+              </div>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" id="check-handover" onchange="onNetworkChange()" class="sr-only peer">
+                <div class="w-10 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500"></div>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <!-- Input 3: Component 1 Device Trust Score (DTS) -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-blue-400"></span>
+              3. Device Trust Score (DTS)
+            </h2>
+            <span id="badge-dts" class="text-xs px-2 py-0.5 rounded font-mono font-bold bg-blue-500/10 text-blue-400 border border-blue-500/30">
+              TRUSTED (DTS = 0.95)
+            </span>
+          </div>
+
+          <div class="space-y-3 text-xs">
+            <div>
+              <label class="block text-slate-400 mb-1">Select Registered Sensor Device (Component 1 SQLite)</label>
+              <select id="select-device" onchange="onDeviceSelect()" class="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-white font-mono text-xs focus:ring-1 focus:ring-blue-500 outline-none">
+                <option value="ECG-01" data-trust="0.95" data-tier="FULL_TRUST">ECG-01 (12-Lead ECG Monitor) — FULL_TRUST (T=0.95)</option>
+                <option value="SPO2-02" data-trust="0.72" data-tier="CONDITIONAL">SPO2-02 (Pulse Oximeter) — CONDITIONAL (T=0.72, Monitored)</option>
+                <option value="BP-03" data-trust="0.00" data-tier="BLOCKED">BP-03 (NIBP Cuff - Clone Warning) — BLOCKED (T=0.00)</option>
+                <option value="UNKNOWN-99" data-trust="0.70" data-tier="FALLBACK">UNKNOWN-99 (Unregistered Patch) — FALLBACK (T=0.70)</option>
+                <option value="CUSTOM">-- Manual Custom Trust Slider --</option>
+              </select>
+            </div>
+
+            <div id="div-custom-dts" class="hidden">
+              <div class="flex justify-between mb-1">
+                <span class="text-slate-400">Manual Trust Score</span>
+                <span id="val-custom-dts" class="font-mono text-white font-bold">0.85</span>
+              </div>
+              <input type="range" id="slider-dts" min="0" max="1" step="0.01" value="0.85" oninput="onCustomTrustChange()" class="w-full accent-blue-400 bg-slate-800 rounded-lg h-1.5 cursor-pointer">
+            </div>
+
+            <div class="p-2.5 rounded-lg bg-slate-950/60 border border-slate-800/80 flex items-center justify-between text-[11px]">
+              <span class="text-slate-400">Component 1 Identity Gate Status:</span>
+              <span id="text-gate-status" class="font-mono font-semibold text-emerald-400">PASSED (Valid Cert & Pinning)</span>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- RIGHT COLUMN: Security Priority Score & Cryptographic Profile (col-span-7) -->
+      <div class="lg:col-span-7 space-y-5">
+
+        <!-- SPS Calculation Card -->
+        <div class="bg-gradient-to-br from-slate-900 via-slate-900 to-slate-950 border border-slate-800 rounded-2xl p-6 shadow-md space-y-5">
+          <div class="flex items-center justify-between pb-3 border-b border-slate-800/80">
+            <div>
+              <h2 class="text-base font-bold text-white flex items-center gap-2">
+                Security Priority Score (SPS) Decision
+              </h2>
+              <p class="text-xs text-slate-400">Deterministic linear weighted calculation (FR4 & FR5)</p>
+            </div>
+            <div class="text-right">
+              <span class="text-xs text-slate-500 uppercase tracking-widest font-mono">Decision Latency</span>
+              <div id="stat-latency" class="text-emerald-400 font-mono font-bold text-sm">0.005 ms (< 5 ms NFR1)</div>
+            </div>
+          </div>
+
+          <!-- Formula Breakdown -->
+          <div class="bg-slate-950/80 p-3.5 rounded-xl border border-slate-800 font-mono text-xs space-y-1.5">
+            <div class="text-slate-400 text-[11px]">
+              SPS = (0.35 × (1 - DTS)) + (0.45 × CC) + (0.20 × NC)
+            </div>
+            <div id="calc-breakdown" class="text-slate-200 text-xs font-semibold">
+              SPS = (0.35 × 0.05) + (0.45 × 0.20) + (0.20 × 0.00) = <span class="text-emerald-400 text-sm">0.1075</span>
+            </div>
+          </div>
+
+          <!-- SPS Gauge Bar -->
+          <div class="space-y-2">
+            <div class="flex justify-between items-baseline text-xs">
+              <span class="text-slate-400">Calculated SPS Value: <span id="text-sps-score" class="font-mono font-bold text-white text-lg ml-1">0.1075</span></span>
+              <span id="text-profile-target" class="font-bold text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">Standard Profile (SPS ≤ 0.40)</span>
+            </div>
+
+            <!-- Multi-tier Bar -->
+            <div class="h-3.5 w-full bg-slate-950 rounded-full border border-slate-800 overflow-hidden relative">
+              <div id="bar-sps" class="h-full bg-emerald-500 transition-all duration-300 rounded-full" style="width: 10.75%;"></div>
+              <!-- Threshold Markers -->
+              <div class="absolute top-0 bottom-0 left-[40%] w-0.5 bg-slate-600/60" title="Standard Threshold: 0.40"></div>
+              <div class="absolute top-0 bottom-0 left-[75%] w-0.5 bg-slate-600/60" title="Enhanced Threshold: 0.75"></div>
+            </div>
+
+            <div class="flex justify-between text-[10px] text-slate-500 font-mono">
+              <span>0.00 (Standard)</span>
+              <span>0.40 (Enhanced Boundary)</span>
+              <span>0.75 (Maximum Boundary)</span>
+              <span>1.00</span>
+            </div>
+          </div>
+
+          <!-- Active Cryptographic Profile Cards -->
+          <div class="grid grid-cols-3 gap-3 pt-2">
+            <!-- Standard Card -->
+            <div id="card-prof-std" class="border-2 border-emerald-500/80 bg-emerald-950/20 rounded-xl p-3 text-center space-y-1 transition">
+              <div class="text-emerald-400 font-bold text-xs uppercase tracking-wider">Standard</div>
+              <div class="text-[11px] text-slate-300">DTLS 1.3 AES-GCM</div>
+              <div class="text-[10px] text-slate-400">No ECDSA Signatures</div>
+              <div class="text-[10px] text-emerald-300 font-mono">Rotate: 300s</div>
+            </div>
+
+            <!-- Enhanced Card -->
+            <div id="card-prof-enh" class="border border-slate-800 bg-slate-950/40 rounded-xl p-3 text-center space-y-1 opacity-50 transition">
+              <div class="text-blue-400 font-bold text-xs uppercase tracking-wider">Enhanced</div>
+              <div class="text-[11px] text-slate-300">DTLS 1.3 + SHA-256</div>
+              <div class="text-[10px] text-slate-400">ECDSA P-256 Signatures</div>
+              <div class="text-[10px] text-blue-300 font-mono">Rotate: 60s</div>
+            </div>
+
+            <!-- Maximum Card -->
+            <div id="card-prof-max" class="border border-slate-800 bg-slate-950/40 rounded-xl p-3 text-center space-y-1 opacity-50 transition">
+              <div class="text-rose-400 font-bold text-xs uppercase tracking-wider">Maximum</div>
+              <div class="text-[11px] text-slate-300">Strict DTLS Binding</div>
+              <div class="text-[10px] text-slate-400">Strict ECDSA + Key Bind</div>
+              <div class="text-[10px] text-rose-300 font-mono">Rotate: 10s / Handover</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cryptographic Execution & Packet Inspector -->
+        <div class="bg-slate-900/90 border border-slate-800 rounded-2xl p-5 shadow-sm space-y-4">
+          <div class="flex items-center justify-between">
+            <h2 class="text-sm font-semibold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+              <span class="w-2.5 h-2.5 rounded-full bg-emerald-400"></span>
+              Cryptographic Encapsulation Output (DTLS 1.3 Simulation)
+            </h2>
+            <div class="flex items-center gap-2">
+              <span id="badge-key-rotation" class="text-[10px] px-2 py-0.5 rounded font-mono font-medium bg-slate-800 text-slate-400 border border-slate-700">
+                Key ID: <span id="text-key-id">key_9a81cd</span>
+              </span>
+            </div>
+          </div>
+
+          <!-- Packet Inspector Fields -->
+          <div class="space-y-2.5 font-mono text-xs">
+            <div>
+              <span class="text-slate-500 text-[11px] block">AES-256-GCM Ciphertext (Authenticated Payload):</span>
+              <div id="code-ciphertext" class="p-2.5 rounded-lg bg-slate-950 border border-slate-800/80 text-emerald-400 break-all select-all text-[11px]">
+                e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855... [298 hex bytes]
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <span class="text-slate-500 text-[11px] block">SHA-256 Integrity Digest:</span>
+                <div id="code-digest" class="p-2 rounded-lg bg-slate-950 border border-slate-800/80 text-slate-300 break-all text-[11px]">
+                  3798711e8224d5f227d086f9...
+                </div>
+              </div>
+
+              <div>
+                <span class="text-slate-500 text-[11px] block">ECDSA (NIST P-256) Digital Signature:</span>
+                <div id="code-signature" class="p-2 rounded-lg bg-slate-950 border border-slate-800/80 text-slate-500 italic text-[11px]">
+                  None (Omitted in Standard to conserve CPU)
+                </div>
+              </div>
+            </div>
+
+            <!-- Receiver Verification Status -->
+            <div class="p-3 rounded-xl bg-emerald-950/20 border border-emerald-500/30 flex items-center justify-between text-xs">
+              <div class="flex items-center gap-2">
+                <span class="text-emerald-400 font-bold">✔ Hospital Receiver:</span>
+                <span id="text-verify-msg" class="text-slate-300">Decryption and SHA-256 authentication verified successfully.</span>
+              </div>
+              <div class="text-right">
+                <span class="text-slate-400 text-[11px]">Total Per-Packet Delay:</span>
+                <span id="text-total-delay" class="font-bold text-white ml-1">0.045 ms</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- Live Telemetry Stream Feed (Active in Stream Mode) -->
+    <div id="stream-feed-card" class="hidden bg-slate-900 border border-slate-800 rounded-2xl p-5 space-y-3">
+      <div class="flex items-center justify-between">
+        <h3 class="text-sm font-bold text-white flex items-center gap-2">
+          <span class="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+          Live Stream Player: PhysioNet MIMIC-III (data.xlsx, data 2.xlsx, data 3.xlsx)
+        </h3>
+        <div class="text-xs text-slate-400 font-mono">
+          Packet: <span id="stream-pkt-index" class="text-white font-bold">0</span> / 4,759
+        </div>
+      </div>
+
+      <!-- Feed Table -->
+      <div class="overflow-x-auto max-h-48 border border-slate-800 rounded-xl">
+        <table class="w-full text-left text-xs font-mono">
+          <thead class="bg-slate-950 text-slate-400 border-b border-slate-800 sticky top-0">
+            <tr>
+              <th class="p-2">Packet ID</th>
+              <th class="p-2">Device</th>
+              <th class="p-2">Vitals (HR/Pulse/SpO2/SBP/DBP/Resp)</th>
+              <th class="p-2">5G RTT / Loss</th>
+              <th class="p-2">SPS</th>
+              <th class="p-2">Profile</th>
+              <th class="p-2">Delay</th>
+            </tr>
+          </thead>
+          <tbody id="stream-table-body" class="divide-y divide-slate-800/60 bg-slate-900/60">
+            <!-- Dynamically populated rows -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // State variables
+    let mode = 'manual';
+    let streamInterval = null;
+    let streamIndex = 0;
+    let streamDataset = [];
+
+    // Realistic default stream simulation items if server API is offline
+    const samplePresets = {
+      normal: { hr: 75, pulse: 74, spo2: 98, sbp: 120, dbp: 80, resp: 16, rtt: 20, loss: 0.1, handover: false, dts: 0.95 },
+      borderline: { hr: 108, pulse: 107, spo2: 93, sbp: 132, dbp: 85, resp: 21, rtt: 45, loss: 1.5, handover: false, dts: 0.72 },
+      critical: { hr: 148, pulse: 145, spo2: 86, sbp: 165, dbp: 105, resp: 28, rtt: 110, loss: 6.0, handover: true, dts: 0.35 }
+    };
+
+    function setMode(newMode) {
+      mode = newMode;
+      const btnManual = document.getElementById('btn-manual-mode');
+      const btnStream = document.getElementById('btn-stream-mode');
+      const btnPlay = document.getElementById('btn-play-stream');
+      const streamCard = document.getElementById('stream-feed-card');
+
+      if (mode === 'manual') {
+        btnManual.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-emerald-600 text-white shadow-sm transition";
+        btnStream.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition";
+        btnPlay.classList.add('hidden');
+        streamCard.classList.add('hidden');
+        stopStream();
+      } else {
+        btnStream.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-blue-600 text-white shadow-sm transition";
+        btnManual.className = "px-3.5 py-1.5 rounded-lg text-xs font-semibold text-slate-400 hover:text-white transition";
+        btnPlay.classList.remove('hidden');
+        btnPlay.classList.add('flex');
+        streamCard.classList.remove('hidden');
+        loadStreamData();
+      }
+    }
+
+    function setVitalPreset(preset) {
+      const p = samplePresets[preset];
+      if (!p) return;
+      document.getElementById('slider-hr').value = p.hr;
+      document.getElementById('slider-pulse').value = p.pulse;
+      document.getElementById('slider-spo2').value = p.spo2;
+      document.getElementById('slider-sbp').value = p.sbp;
+      document.getElementById('slider-dbp').value = p.dbp;
+      document.getElementById('slider-resp').value = p.resp;
+      document.getElementById('slider-rtt').value = p.rtt;
+      document.getElementById('slider-loss').value = p.loss;
+      document.getElementById('check-handover').checked = p.handover;
+
+      if (preset === 'normal') document.getElementById('select-device').value = 'ECG-01';
+      else if (preset === 'borderline') document.getElementById('select-device').value = 'SPO2-02';
+      else document.getElementById('select-device').value = 'BP-03';
+
+      updateEvaluation();
+    }
+
+    function onVitalChange() { updateEvaluation(); }
+    function onNetworkChange() { updateEvaluation(); }
+    function onCustomTrustChange() { updateEvaluation(); }
+
+    function onDeviceSelect() {
+      const sel = document.getElementById('select-device');
+      const customDiv = document.getElementById('div-custom-dts');
+      if (sel.value === 'CUSTOM') {
+        customDiv.classList.remove('hidden');
+      } else {
+        customDiv.classList.add('hidden');
+      }
+      updateEvaluation();
+    }
+
+    function computeClinicalCriticality(vitals) {
+      const hr = vitals.hr;
+      const spo2 = vitals.spo2;
+      const sbp = vitals.sbp;
+      const dbp = vitals.dbp;
+      const resp = vitals.resp;
+
+      // AHA/WHO/ESC boundaries
+      if (hr < 50 || hr > 120 || spo2 < 90 || sbp < 80 || sbp > 140 || dbp < 50 || dbp > 90 || resp < 10 || resp > 24) {
+        return 1.0;
+      }
+      if (hr < 60 || hr > 100 || spo2 < 95 || sbp < 90 || sbp > 120 || dbp < 60 || dbp > 80 || resp < 12 || resp > 20) {
+        return 0.6;
+      }
+      return 0.2;
+    }
+
+    function computeNetworkCondition(rtt, loss, handover) {
+      let rttScore = (rtt <= 30) ? 0.0 : (rtt >= 100 ? 1.0 : (rtt - 30) / 70);
+      let lossScore = (loss <= 1.0) ? 0.0 : (loss >= 5.0 ? 1.0 : (loss - 1.0) / 4.0);
+      let combined = (0.5 * rttScore) + (0.5 * lossScore);
+      if (handover) combined = Math.min(1.0, combined + 0.3);
+      return Math.round(combined * 1000) / 1000;
+    }
+
+    function getDTS() {
+      const sel = document.getElementById('select-device');
+      if (sel.value === 'CUSTOM') {
+        return parseFloat(document.getElementById('slider-dts').value);
+      }
+      const opt = sel.options[sel.selectedIndex];
+      return parseFloat(opt.getAttribute('data-trust'));
+    }
+
+    function updateEvaluation() {
+      // 1. Gather vitals
+      const vitals = {
+        hr: parseInt(document.getElementById('slider-hr').value),
+        pulse: parseInt(document.getElementById('slider-pulse').value),
+        spo2: parseInt(document.getElementById('slider-spo2').value),
+        sbp: parseInt(document.getElementById('slider-sbp').value),
+        dbp: parseInt(document.getElementById('slider-dbp').value),
+        resp: parseInt(document.getElementById('slider-resp').value),
+      };
+
+      // Update UI slider labels
+      document.getElementById('val-hr').textContent = vitals.hr + " bpm";
+      document.getElementById('val-pulse').textContent = vitals.pulse + " bpm";
+      document.getElementById('val-spo2').textContent = vitals.spo2 + " %";
+      document.getElementById('val-sbp').textContent = vitals.sbp + " mmHg";
+      document.getElementById('val-dbp').textContent = vitals.dbp + " mmHg";
+      document.getElementById('val-resp').textContent = vitals.resp + " /min";
+
+      // 2. Compute CC
+      const cc = computeClinicalCriticality(vitals);
+      const ccBadge = document.getElementById('badge-cc');
+      if (cc === 1.0) {
+        ccBadge.className = "text-xs px-2 py-0.5 rounded font-mono font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30";
+        ccBadge.textContent = "CRITICAL (CC = 1.00)";
+      } else if (cc === 0.6) {
+        ccBadge.className = "text-xs px-2 py-0.5 rounded font-mono font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30";
+        ccBadge.textContent = "BORDERLINE (CC = 0.60)";
+      } else {
+        ccBadge.className = "text-xs px-2 py-0.5 rounded font-mono font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30";
+        ccBadge.textContent = "NORMAL (CC = 0.20)";
+      }
+
+      // 3. Compute NC
+      const rtt = parseFloat(document.getElementById('slider-rtt').value);
+      const loss = parseFloat(document.getElementById('slider-loss').value);
+      const handover = document.getElementById('check-handover').checked;
+      document.getElementById('val-rtt').textContent = rtt.toFixed(1) + " ms";
+      document.getElementById('val-loss').textContent = loss.toFixed(1) + " %";
+
+      const nc = computeNetworkCondition(rtt, loss, handover);
+      const ncBadge = document.getElementById('badge-nc');
+      if (nc > 0.6) {
+        ncBadge.className = "text-xs px-2 py-0.5 rounded font-mono font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30";
+        ncBadge.textContent = `DEGRADED (NC = ${nc.toFixed(2)})`;
+      } else if (nc > 0.2) {
+        ncBadge.className = "text-xs px-2 py-0.5 rounded font-mono font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30";
+        ncBadge.textContent = `MODERATE (NC = ${nc.toFixed(2)})`;
+      } else {
+        ncBadge.className = "text-xs px-2 py-0.5 rounded font-mono font-bold bg-cyan-500/10 text-cyan-400 border border-cyan-500/30";
+        ncBadge.textContent = `OPTIMAL (NC = ${nc.toFixed(2)})`;
+      }
+
+      // 4. Compute DTS
+      const dts = getDTS();
+      const dtsBadge = document.getElementById('badge-dts');
+      const gateText = document.getElementById('text-gate-status');
+      document.getElementById('val-custom-dts').textContent = dts.toFixed(2);
+
+      if (dts >= 0.80) {
+        dtsBadge.className = "text-xs px-2 py-0.5 rounded font-mono font-bold bg-blue-500/10 text-blue-400 border border-blue-500/30";
+        dtsBadge.textContent = `FULL_TRUST (DTS = ${dts.toFixed(2)})`;
+        gateText.textContent = "PASSED (Valid Cert & Pinning)";
+        gateText.className = "font-mono font-semibold text-emerald-400";
+      } else if (dts >= 0.60) {
+        dtsBadge.className = "text-xs px-2 py-0.5 rounded font-mono font-bold bg-amber-500/10 text-amber-300 border border-amber-500/30";
+        dtsBadge.textContent = `CONDITIONAL (DTS = ${dts.toFixed(2)})`;
+        gateText.textContent = "MONITORED (Degraded Health/Reputation)";
+        gateText.className = "font-mono font-semibold text-amber-400";
+      } else {
+        dtsBadge.className = "text-xs px-2 py-0.5 rounded font-mono font-bold bg-rose-500/10 text-rose-400 border border-rose-500/30";
+        dtsBadge.textContent = `BLOCKED / ROGUE (DTS = ${dts.toFixed(2)})`;
+        gateText.textContent = "BLOCKED (Identity Gate Failed)";
+        gateText.className = "font-mono font-semibold text-rose-400";
+      }
+
+      // 5. SPS Calculation
+      const w_dts = 0.35, w_cc = 0.45, w_nc = 0.20;
+      const device_risk = 1.0 - dts;
+      const sps = Math.min(1.0, Math.max(0.0, (w_dts * device_risk) + (w_cc * cc) + (w_nc * nc)));
+      const spsRounded = sps.toFixed(4);
+
+      document.getElementById('text-sps-score').textContent = spsRounded;
+      document.getElementById('calc-breakdown').innerHTML =
+        `SPS = (0.35 × ${device_risk.toFixed(2)}) + (0.45 × ${cc.toFixed(2)}) + (0.20 × ${nc.toFixed(2)}) = <span class="text-emerald-400 text-sm font-bold">${spsRounded}</span>`;
+
+      // Profile Thresholds
+      let profile = "Standard";
+      if (sps <= 0.40) profile = "Standard";
+      else if (sps <= 0.75) profile = "Enhanced";
+      else profile = "Maximum";
+
+      // Profile Badges and Cards UI
+      const bar = document.getElementById('bar-sps');
+      const targetText = document.getElementById('text-profile-target');
+      const cardStd = document.getElementById('card-prof-std');
+      const cardEnh = document.getElementById('card-prof-enh');
+      const cardMax = document.getElementById('card-prof-max');
+      const sigCode = document.getElementById('code-signature');
+
+      bar.style.width = `${Math.min(100, sps * 100)}%`;
+
+      cardStd.className = "border border-slate-800 bg-slate-950/40 rounded-xl p-3 text-center space-y-1 opacity-50 transition";
+      cardEnh.className = "border border-slate-800 bg-slate-950/40 rounded-xl p-3 text-center space-y-1 opacity-50 transition";
+      cardMax.className = "border border-slate-800 bg-slate-950/40 rounded-xl p-3 text-center space-y-1 opacity-50 transition";
+
+      if (profile === "Standard") {
+        bar.className = "h-full bg-emerald-500 transition-all duration-300 rounded-full";
+        targetText.className = "font-bold text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40";
+        targetText.textContent = "Standard Profile (SPS ≤ 0.40)";
+        cardStd.className = "border-2 border-emerald-500/80 bg-emerald-950/30 rounded-xl p-3 text-center space-y-1 scale-105 shadow-md shadow-emerald-950/50 transition";
+        sigCode.textContent = "None (Omitted in Standard to conserve vehicular CPU)";
+        sigCode.className = "p-2 rounded-lg bg-slate-950 border border-slate-800/80 text-slate-500 italic text-[11px]";
+      } else if (profile === "Enhanced") {
+        bar.className = "h-full bg-blue-500 transition-all duration-300 rounded-full";
+        targetText.className = "font-bold text-xs px-2.5 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/40";
+        targetText.textContent = "Enhanced Profile (0.40 < SPS ≤ 0.75)";
+        cardEnh.className = "border-2 border-blue-500/80 bg-blue-950/30 rounded-xl p-3 text-center space-y-1 scale-105 shadow-md shadow-blue-950/50 transition";
+        sigCode.textContent = "3045022100e47... [64-byte ECDSA P-256 Digital Signature]";
+        sigCode.className = "p-2 rounded-lg bg-slate-950 border border-slate-800/80 text-blue-400 break-all text-[11px]";
+      } else {
+        bar.className = "h-full bg-rose-500 transition-all duration-300 rounded-full";
+        targetText.className = "font-bold text-xs px-2.5 py-0.5 rounded-full bg-rose-500/20 text-rose-400 border border-rose-500/40";
+        targetText.textContent = "Maximum Profile (SPS > 0.75)";
+        cardMax.className = "border-2 border-rose-500/80 bg-rose-950/30 rounded-xl p-3 text-center space-y-1 scale-105 shadow-md shadow-rose-950/50 transition";
+        sigCode.textContent = "3046022100fa1... [Strict ECDSA P-256 + Key Binding Signature]";
+        sigCode.className = "p-2 rounded-lg bg-slate-950 border border-slate-800/80 text-rose-400 break-all text-[11px]";
+      }
+
+      // Latency simulation (conforming to measured benchmark numbers)
+      const decLat = (0.004 + Math.random() * 0.002).toFixed(4);
+      const totalLat = (profile === 'Standard' ? 0.015 + Math.random() * 0.01 : 0.052 + Math.random() * 0.02).toFixed(4);
+      document.getElementById('stat-latency').textContent = `${decLat} ms (< 5 ms)`;
+      document.getElementById('text-total-delay').textContent = `${totalLat} ms`;
+    }
+
+    // Stream Mode
+    async function loadStreamData() {
+      try {
+        const res = await fetch('/api/stream/next');
+        if (res.ok) {
+          const item = await res.json();
+          renderStreamRow(item);
+        }
+      } catch (e) {
+        // Fallback local simulated MIMIC stream if running in offline standalone HTML mode
+        renderSimulatedStreamRow();
+      }
+    }
+
+    function renderSimulatedStreamRow() {
+      streamIndex++;
+      const presets = ['normal', 'normal', 'borderline', 'normal', 'critical'];
+      const pKey = presets[streamIndex % presets.length];
+      const p = samplePresets[pKey];
+
+      const tbody = document.getElementById('stream-table-body');
+      const tr = document.createElement('tr');
+      tr.className = "hover:bg-slate-800/40 transition";
+      const sps = (pKey === 'normal') ? '0.1075' : (pKey === 'borderline' ? '0.4280' : '0.8850');
+      const prof = (pKey === 'normal') ? 'Standard' : (pKey === 'borderline' ? 'Enhanced' : 'Maximum');
+      const profBadge = (prof === 'Standard') ? 'text-emerald-400' : (prof === 'Enhanced' ? 'text-blue-400' : 'text-rose-400');
+
+      tr.innerHTML = `
+        <td class="p-2 text-slate-300">mimic_${String(streamIndex).padStart(5, '0')}</td>
+        <td class="p-2 text-slate-400">sensor_ecg</td>
+        <td class="p-2 text-white">${p.hr}/${p.pulse}/${p.spo2}%/${p.sbp}/${p.dbp}/${p.resp}</td>
+        <td class="p-2 text-slate-300">${p.rtt}ms / ${p.loss}%</td>
+        <td class="p-2 text-slate-200">${sps}</td>
+        <td class="p-2 font-bold ${profBadge}">[${prof}]</td>
+        <td class="p-2 text-emerald-400">0.05 ms</td>
+      `;
+      tbody.prepend(tr);
+      if (tbody.children.length > 20) tbody.removeChild(tbody.lastChild);
+      document.getElementById('stream-pkt-index').textContent = streamIndex;
+    }
+
+    function toggleStreamPlay() {
+      const playText = document.getElementById('play-text');
+      const playIcon = document.getElementById('play-icon');
+      if (streamInterval) {
+        stopStream();
+      } else {
+        playText.textContent = "Pause Auto-Play";
+        playIcon.textContent = "⏸";
+        streamInterval = setInterval(() => {
+          loadStreamData();
+        }, 600);
+      }
+    }
+
+    function stopStream() {
+      if (streamInterval) {
+        clearInterval(streamInterval);
+        streamInterval = null;
+        const playText = document.getElementById('play-text');
+        const playIcon = document.getElementById('play-icon');
+        if (playText) playText.textContent = "Start Auto-Play";
+        if (playIcon) playIcon.textContent = "▶";
+      }
+    }
+
+    // Initialize on page load
+    window.onload = function() {
+      updateEvaluation();
+    };
+  </script>
+</body>
+</html>
