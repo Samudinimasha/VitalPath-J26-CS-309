@@ -2,7 +2,7 @@
 (function () {
   "use strict";
 
-  const state = { events: [], stats: {}, incident: null, settings: {}, filter: "all" };
+  const state = { events: [], notable: [], stats: {}, incident: null, settings: {}, filter: "all", paused: false };
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   const clock = (t) => new Date(t * 1000).toLocaleTimeString([], { hour12: false });
@@ -108,6 +108,7 @@
   const FILTERS = {
     all: () => true,
     discard: (e) => e.decision === "DISCARD",
+    unopened: (e) => e.decision === "DISCARD" && !e.vitals && e.replay !== "accepted",
     flag: (e) => e.decision === "FLAG",
     replay: (e) => e.replay === "dropped",
     range: (e) => e.rules.some((r) => /^R-(HR|SPO2|SBP|DBP|RESP)-/.test(r)),
@@ -152,8 +153,12 @@
   }
 
   function renderRows(freshIds) {
+    if (state.paused) return;
     const f = FILTERS[state.filter];
-    const rows = state.events.filter(f).slice(-120).reverse();
+    // "All" shows the recent stream; every other filter searches the kept list
+    // of discarded and flagged packets, so they don't scroll away.
+    const source = state.filter === "all" ? state.events : state.notable;
+    const rows = source.filter(f).slice(-200).reverse();
     $("rows").innerHTML = rows.map((e) => rowHtml(e, freshIds && freshIds.has(e.id))).join("") ||
       `<tr><td colspan="7" class="detail">No packets match this filter yet.</td></tr>`;
   }
@@ -195,7 +200,13 @@
       ["Discarded without decryption", s.discarded_unopened],
       ["Mean check latency", `${s.mean_ms} ms`], ["99th percentile latency", `${s.p99_ms} ms`], ["Budget", "20 ms"],
     ];
-    $("stats").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v == null ? "—" : v)}</dd>`).join("");
+    const link = { Flagged: "flag", Discarded: "discard", "Discarded without decryption": "unopened" };
+    $("stats").innerHTML = rows.map(([k, v]) => {
+      const value = esc(v == null ? "—" : v);
+      return link[k]
+        ? `<dt><button class="stat-link" data-show="${link[k]}">${k}</button></dt><dd><button class="stat-link" data-show="${link[k]}">${value}</button></dd>`
+        : `<dt>${k}</dt><dd>${value}</dd>`;
+    }).join("");
     const st = state.settings;
     $("settings").innerHTML = [
       ["Replay window", `${st.window} packet IDs`], ["Max packet age", `${st.max_age_s} s`],
@@ -323,12 +334,30 @@
     $("view-incident").hidden = t.dataset.view !== "incident";
     if (t.dataset.view === "incident") renderIncident(); else renderTrace();
   }));
+  function setFilter(name) {
+    state.filter = name;
+    document.querySelectorAll("#filters .chip").forEach((c) => c.classList.toggle("active", c.dataset.f === name));
+    const wasPaused = state.paused;
+    state.paused = false;
+    renderRows();
+    state.paused = wasPaused;
+  }
   $("filters").addEventListener("click", (ev) => {
     const b = ev.target.closest("[data-f]");
+    if (b) setFilter(b.dataset.f);
+  });
+  $("stats").addEventListener("click", (ev) => {
+    const b = ev.target.closest("[data-show]");
     if (!b) return;
-    state.filter = b.dataset.f;
-    document.querySelectorAll("#filters .chip").forEach((c) => c.classList.toggle("active", c === b));
-    renderRows();
+    setFilter(b.dataset.show);
+    document.querySelector(".table-card").scrollIntoView({ block: "start" });
+  });
+  $("pause").addEventListener("click", () => {
+    state.paused = !state.paused;
+    $("pause").setAttribute("aria-pressed", String(state.paused));
+    $("pause").textContent = state.paused ? "Resume" : "Pause";
+    $("pause").classList.toggle("active", state.paused);
+    if (!state.paused) renderRows();
   });
 
   // ---------------------------------------------------------------- live data
@@ -363,6 +392,7 @@
 
   refreshState().then((s) => {
     state.events = s.events;
+    state.notable = s.notable || [];
     renderButtons(s.attacks, s.source);
     schedule();
     const source = new EventSource("/api/stream");
@@ -372,6 +402,10 @@
       const e = JSON.parse(msg.data);
       state.events.push(e);
       if (state.events.length > 400) state.events.splice(0, state.events.length - 400);
+      if (e.decision !== "ACCEPT") {
+        state.notable.push(e);
+        if (state.notable.length > 1000) state.notable.splice(0, state.notable.length - 1000);
+      }
       pending.add(e.id);
       schedule();
     };

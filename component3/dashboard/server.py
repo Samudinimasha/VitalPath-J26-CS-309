@@ -121,6 +121,9 @@ class DemoStream:
         self.sent = []  # genuine packets, as an eavesdropper would capture them
         self.commands = queue.Queue()
         self.events = deque(maxlen=400)
+        # Discarded and flagged packets kept separately, so they stay findable
+        # after a fast stream has pushed them out of the recent list.
+        self.notable = deque(maxlen=1000)
         self.subscribers = []
         self.lock = threading.Lock()
         self.stats = Counter()
@@ -189,6 +192,8 @@ class DemoStream:
                 "stages": stages_of(result),
             }
             self.events.append(event)
+            if rec.decision != "ACCEPT":
+                self.notable.append(event)
             self.stats["packets"] += 1
             self.stats[rec.decision] += 1
             if rec.decision == "DISCARD" and not result.decrypted:
@@ -310,6 +315,7 @@ class DemoStream:
                 "attacks": ATTACKS if self.source == "simulated" else {},
                 "source": self.source,
                 "events": list(self.events),
+                "notable": list(self.notable),
                 "stats": {
                     "packets": self.stats["packets"],
                     "accepted": self.stats["ACCEPT"],

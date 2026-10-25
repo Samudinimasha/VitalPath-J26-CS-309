@@ -40,10 +40,14 @@
 
     <div class="card table-card">
       <div class="card-head">
-        <h2>Packets</h2>
+        <div class="packets-title">
+          <h2>Packets</h2>
+          <button class="chip pause" id="pause" aria-pressed="false">Pause</button>
+        </div>
         <div class="chips" id="filters">
           <button class="chip active" data-f="all">All</button>
           <button class="chip" data-f="discard">Discarded</button>
+          <button class="chip" data-f="unopened">Never decrypted</button>
           <button class="chip" data-f="flag">Flagged</button>
           <button class="chip" data-f="replay">Replay</button>
           <button class="chip" data-f="range">Range</button>
