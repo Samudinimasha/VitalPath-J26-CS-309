@@ -207,7 +207,12 @@ class ReplayDetectionEngine:
     def _advance(self, window: _DeviceWindow, number: int, ts: float) -> None:
         """Slide the window forward so that ``number`` becomes the highest accepted."""
         shift = number - window.highest_number
-        window.bitmap = ((window.bitmap << shift) | 1) & self._mask
+        if shift >= self.config.window_size:
+            # Everything remembered falls out of the window; avoid building a
+            # huge integer when a confirmed jump is very large.
+            window.bitmap = 1
+        else:
+            window.bitmap = ((window.bitmap << shift) | 1) & self._mask
         window.highest_number = number
         window.highest_ts = max(window.highest_ts, ts)
         pending = window.pending_jump_number

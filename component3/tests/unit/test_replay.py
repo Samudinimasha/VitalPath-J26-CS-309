@@ -316,6 +316,16 @@ def test_confirm_jump_advances_window(engine, clock):
     assert engine.check(hdr(2, clock.now)).rule is Rule.REPLAY_OUTSIDE_WINDOW
 
 
+def test_confirm_jump_to_largest_packet_number_is_safe(engine, clock):
+    """A confirmed jump to the top of the 64-bit range must not try to build a
+    2**64-bit integer when the window slides."""
+    feed(engine, clock, [1])
+    far = PacketHeader(DEVICE, f"PKT-{PACKET_NUMBER_MAX}", clock.now)
+    assert engine.check(far).rule is Rule.PACKET_JUMP
+    assert engine.confirm_jump(DEVICE, PACKET_NUMBER_MAX)
+    assert engine.check(far).rule is Rule.REPLAY_DUPLICATE
+
+
 def test_confirm_jump_ignores_unknown_packets(engine, clock):
     feed(engine, clock, [1])
     assert not engine.confirm_jump(DEVICE, 5000)
