@@ -5,6 +5,7 @@ Usage (from component3/):
     PYTHONPATH=src python3 -m simulator.try_engines correlation --hr 64 --pulse 72 --spo2 13.9
     PYTHONPATH=src python3 -m simulator.try_engines decision    --hr 64 --pulse 72 --spo2 13.9
     PYTHONPATH=src python3 -m simulator.try_engines decryption  --hr 92 --spo2 98
+    PYTHONPATH=src python3 -m simulator.try_engines keys        --hr 92 --spo2 98
 
 Vitals you leave out count as "no reading". Units: hr and pulse in bpm,
 spo2 in %, sbp and dbp in mmHg, resp in breaths per minute.
@@ -13,6 +14,8 @@ spo2 in %, sbp and dbp in mmHg, resp in breaths per minute.
 import argparse
 import dataclasses
 import os
+
+from simulator.demo_keys import demo_key
 
 from vitalpath_c3.crypto.payload_encryption import PayloadDecryptor, PayloadError, seal
 from vitalpath_c3.engines.correlation import CorrelationEngine
@@ -70,11 +73,29 @@ def show_decryption(vitals):
             print(f"  {label}: REJECTED, {err.rule.value}")
 
 
+def show_keys(vitals):
+    print("Demo keys: both sides compute the same key; the key is never sent\n")
+    ambulance_key = demo_key("MON-01")
+    hospital_key = demo_key("MON-01")
+    print(f"  Ambulance key  : {ambulance_key.hex()[:32]}...")
+    print(f"  Hospital key   : {hospital_key.hex()[:32]}...")
+    print(f"  Same key?      : {ambulance_key == hospital_key}")
+    packet = seal(PacketHeader("MON-01", "PKT-000001", 1_800_000_000.0, "CASE001"), vitals, ambulance_key)
+    print(f"  On the network : {packet.payload.hex()[:40]}... (only this travels)")
+    print(f"  Hospital opens : {PayloadDecryptor(lambda _device: hospital_key).decrypt(packet)}")
+    try:
+        PayloadDecryptor(lambda _device: demo_key("MON-99")).decrypt(packet)
+        print("  Wrong key      : opened (unexpected)")
+    except PayloadError as err:
+        print(f"  Wrong key      : REJECTED, {err.rule.value}")
+
+
 ENGINES = {
     "threshold": show_threshold,
     "correlation": show_correlation,
     "decision": show_decision,
     "decryption": show_decryption,
+    "keys": show_keys,
 }
 
 

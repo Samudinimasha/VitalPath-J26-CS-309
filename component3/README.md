@@ -81,6 +81,7 @@ PYTHONPATH=src python3 -m simulator.try_engines threshold   --hr 150 --spo2 88
 PYTHONPATH=src python3 -m simulator.try_engines correlation --hr 64 --pulse 72 --spo2 13.9
 PYTHONPATH=src python3 -m simulator.try_engines decision    --hr 64 --pulse 72 --spo2 13.9
 PYTHONPATH=src python3 -m simulator.try_engines decryption  --hr 92 --spo2 98
+PYTHONPATH=src python3 -m simulator.try_engines keys        --hr 92 --spo2 98
 ```
 
 ## Live demo
