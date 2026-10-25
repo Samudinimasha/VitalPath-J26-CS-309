@@ -48,7 +48,7 @@ def main() -> None:
             "or use a different port with --port (and pass the same --port to the sender)."
         )
     print(f"Component 3 pipeline listening on udp://{args.host}:{args.port}  (Ctrl+C to stop)\n")
-    print(f"{'case':<8} {'device':<8} {'packet':<11} {'decided by':<16} {'decision':<8} {'label':<10} {'score':>5}  {'latency':>8}  rules / reason")
+    print(f"{'case':<8} {'device':<8} {'packet':<11} {'replay':<9} {'decision':<8} {'label':<10} {'score':>5}  {'latency':>8}  rules / reason")
 
     decisions: Counter = Counter()
     rules: Counter = Counter()
@@ -67,14 +67,22 @@ def main() -> None:
             reason = ", ".join(rec.rules) if rec.rules else "-"
             if rec.decision == "DISCARD":
                 reason += f"  {DIM}{result.detail}{RESET}"
+            # Replay Engine's own verdict: accepted, dropped, or "-" if a flood
+            # stopped the packet before the replay check.
+            if result.replay is None:
+                replay = f"{'-':<9}"
+            elif result.replay.passed:
+                replay = f"{COLOURS['ACCEPT']}{'accepted':<9}{RESET}"
+            else:
+                replay = f"{COLOURS['DISCARD']}{'dropped':<9}{RESET}"
             print(
                 f"{str(rec.case_id):<8} {str(rec.device_id):<8} {str(rec.packet_id):<11} "
-                f"{rec.decided_by:<16} {COLOURS[rec.decision]}{rec.decision:<8} {rec.label or '':<10}{RESET} "
+                f"{replay} {COLOURS[rec.decision]}{rec.decision:<8} {rec.label or '':<10}{RESET} "
                 f"{'' if rec.score is None else rec.score:>5}  {result.latency_ms:>6.2f}ms  {reason}"
             )
             if args.explain and rec.decision == "FLAG":
                 for line in result.explain().splitlines()[1:]:
-                    print(f"{DIM}{'':>70}{line.strip()}{RESET}")
+                    print(f"{DIM}{'':>63}{line.strip()}{RESET}")
     except KeyboardInterrupt:
         pass
     finally:

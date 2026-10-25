@@ -205,15 +205,13 @@ def test_tampered_payload_discarded_and_does_not_burn_packet_id(pipeline):
     assert outcome(pipeline.process(genuine)) == ("ACCEPT", "Normal")
 
 
-def test_decided_by_names_the_stage(pipeline, clock):
+def test_replay_verdict_kept_for_each_packet(pipeline, clock):
     stream(pipeline, clock, [1])
-    assert pipeline.process(packet(2, ts=clock.now)).summary.decided_by == "Decision Engine"
-    assert pipeline.process(packet(2, ts=clock.now)).summary.decided_by == "Replay Engine"
-    genuine = packet(3, ts=clock.now)
-    tampered = EncryptedPacket(genuine.header, genuine.payload[:-1] + bytes([genuine.payload[-1] ^ 1]))
-    assert pipeline.process(tampered).summary.decided_by == "Decryption"
-    flood = [pipeline.process(packet(n, ts=clock.now)).summary for n in range(10, 40)]
-    assert flood[-1].decided_by == "Flood guard"
+    assert pipeline.process(packet(2, ts=clock.now)).replay.passed
+    replayed = pipeline.process(packet(2, ts=clock.now))
+    assert not replayed.replay.passed
+    flood = [pipeline.process(packet(n, ts=clock.now)) for n in range(10, 40)]
+    assert flood[-1].replay is None  # stopped by the flood guard before the replay check
 
 
 def test_results_carry_case_id(pipeline):
