@@ -193,6 +193,10 @@ class VitalPathPipeline:
 
         # Attach telemetry middleware transmission headers
         sec_packet["sps"] = decision["sps"]
+        sec_packet["factors"] = decision["factors"]
+        sec_packet["key_rotation_seconds"] = decision.get("key_rotation_seconds", 60)
+        if "trust_verdict" in decision:
+            sec_packet["trust_verdict"] = decision["trust_verdict"]
         sec_packet["decision_latency_ms"] = decision["decision_latency_ms"]
         sec_packet["total_latency_ms"] = round(total_latency_ms, 4)
 
