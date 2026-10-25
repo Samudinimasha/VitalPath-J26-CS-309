@@ -158,3 +158,17 @@ def test_listen_mode_processes_sender_packets_and_spots_handover():
     assert s.snapshot()["attacks"] == {}
     tagged = [(e["packet_id"], e["injected"], e["decision"]) for e in s.incident["events"]]
     assert tagged == [("PKT-000002", "handover", "DISCARD"), ("PKT-000004", "handover-next", "ACCEPT")]
+
+
+def test_automatic_attacks_cycle_through_the_list():
+    s = DemoStream("datasets/bidmc_53n.csv", 60, rate=200.0, handover_gap=0.05, auto_every=2)
+    t = threading.Thread(target=s.run, daemon=True)
+    t.start()
+    import time
+    deadline = time.time() + 10
+    while time.time() < deadline and not {"replay", "handover", "tamper"} <= {e["injected"] for e in s.events}:
+        time.sleep(0.05)
+    s.stopping = True
+    injected = {e["injected"] for e in s.events}
+    assert {"replay", "handover", "tamper"} <= injected
+    assert any(e["decision"] == "DISCARD" for e in s.events)

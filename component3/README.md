@@ -78,6 +78,13 @@ score and rules, and buttons to inject attacks and sensor faults; click a packet
 each stage handled it. The **Handover incident** tab shows the most recent 5G handover replay
 on a timeline. Stop the server with Ctrl+C. Demo keys only.
 
+Add `--attacks` to inject an attack automatically every 8 genuine packets (cycling through the
+same list as the buttons), so discards and flags appear without pressing anything:
+
+```bash
+PYTHONPATH=src python3 -m dashboard.server --attacks
+```
+
 To show the stream from the terminal sender instead, start the website in listen mode, then
 the sender in a second terminal (stop `simulator.hospital_receiver` first; both use UDP 5005):
 

@@ -3,6 +3,7 @@
 Usage (from component3/):
     PYTHONPATH=src python3 -m dashboard.server            # then open http://localhost:8000
     PYTHONPATH=src python3 -m dashboard.server --rate 2   # two packets per second
+    PYTHONPATH=src python3 -m dashboard.server --attacks  # also inject an attack every 8 packets
     PYTHONPATH=src python3 -m dashboard.server --listen   # show packets from ambulance_sender
 
 With --listen the website makes no packets of its own: it receives what
@@ -22,6 +23,7 @@ stream. Demo keys only (see simulator/demo_keys.py). Runs on localhost.
 
 import argparse
 import dataclasses
+import itertools
 import json
 import logging
 import os
@@ -109,7 +111,7 @@ def stages_of(result):
 class DemoStream:
     """The simulated ambulance, the attacker and the pipeline, run on one worker thread."""
 
-    def __init__(self, data_path, start, rate, handover_gap=3.0):
+    def __init__(self, data_path, start, rate, handover_gap=3.0, auto_every=0):
         self.pipeline = Pipeline(PayloadDecryptor(demo_key))
         self.key = demo_key(DEVICE)
         self.vitals = endless_vitals(data_path, start)
@@ -128,6 +130,10 @@ class DemoStream:
         self.incident = None  # most recent handover, for the incident view
         self.stopping = False
         self.source = "simulated"  # or "udp://host:port" in listen mode
+        # With auto_every > 0, inject the next attack after every N genuine packets.
+        self.auto_every = auto_every
+        self.auto_cycle = itertools.cycle(ATTACKS)
+        self.genuine_since_attack = 0
 
     # --- packets -------------------------------------------------------------
 
@@ -253,6 +259,10 @@ class DemoStream:
             except queue.Empty:
                 pass
             self.process(self.genuine())
+            self.genuine_since_attack += 1
+            if self.auto_every and self.genuine_since_attack >= self.auto_every:
+                self.genuine_since_attack = 0
+                self.commands.put(next(self.auto_cycle))
             next_tick += self.interval
             if next_tick < time.time():
                 next_tick = time.time() + self.interval
@@ -384,13 +394,16 @@ def main():
     parser.add_argument("--rate", type=float, default=1.0, help="genuine packets per second")
     parser.add_argument("--data", default="datasets/bidmc_53n.csv")
     parser.add_argument("--start", type=int, default=60, help="row of the recording to start from")
+    parser.add_argument("--attacks", action="store_true",
+                        help="inject an attack automatically every --every genuine packets")
+    parser.add_argument("--every", type=int, default=8, help="genuine packets between automatic attacks")
     parser.add_argument("--listen", action="store_true",
                         help="show packets from simulator.ambulance_sender instead of a built-in stream")
     parser.add_argument("--udp-port", type=int, default=DEFAULT_PORT, help="UDP port to listen on with --listen")
     args = parser.parse_args()
 
     logging.getLogger("vitalpath_c3").setLevel(logging.ERROR)
-    stream = DemoStream(args.data, args.start, args.rate)
+    stream = DemoStream(args.data, args.start, args.rate, auto_every=args.every if args.attacks else 0)
     if args.listen:
         udp = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         try:
